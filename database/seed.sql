@@ -57,3 +57,35 @@ INSERT INTO kontak_admin (id_user, nomor_whatsapp) VALUES
 
 INSERT INTO users (username, password, nama, email, role, status_akun, akun_diblokir) VALUES
 ('manajer1', '$2y$10$92IXMOqn3Jg3PfnxD3iB.54.16M0n7Xi', 'Bima Aditya', 'manajer@makychicken.com', 'Manajer', 'Aktif', FALSE);
+
+INSERT INTO reservasi (id_reservasi, kode_booking, nama_pemesan, kontak_pemesanan, tanggal, slot_waktu, lantai, jumlah_orang, subtotal, dp, service_fee, total, status, status_dp) VALUES
+(1, 'RES-20261025-001', 'Keluarga Hendra', '081234567890', '2026-10-25', '14:00 WIB', 2, 6, 380000.00, 400000.00, 20000.00, 400000.00, 'Confirmed', 'Lunas'),
+(2, 'RES-20261025-002', 'Sari Wulandari', '085712345678', '2026-10-25', '18:30 WIB', 1, 4, 230000.00, 250000.00, 20000.00, 250000.00, 'Confirmed', 'Lunas'),
+(3, 'RES-20261025-003', 'Bima Aditya', '081987654321', '2026-10-25', '19:00 WIB', 1, 8, 520000.00, 550000.00, 30000.00, 550000.00, 'Confirmed', 'Lunas');
+
+-- 2. Sisipkan Header Pesanan Terkait Reservasi (Tabel pesanan)
+INSERT INTO pesanan (id_pesanan, kode_pesanan, no_meja, jenis_pesanan, status, total_harga, waktu_pesan) VALUES
+(3, 'TRX-20251025-0140', 15, 'Reservasi (Lt. 2)', 'Selesai', 400000.00, '2026-10-25 14:02:00'),
+(4, 'TRX-20251025-0143', 4, 'Reservasi (Lt. 1)', 'Selesai', 250000.00, '2026-10-25 18:30:00'),
+(5, 'TRX-20251025-0144', 8, 'Reservasi (Lt. 1)', 'Selesai', 550000.00, '2026-10-25 19:00:00');
+
+-- 3. Sisipkan Rincian Item Menu Reservasi (Tabel detail_pesanan)
+INSERT INTO detail_pesanan (id_pesanan, id_menu, jumlah, subtotal) VALUES
+(3, 1, 6, 168000.00), -- Paket Ayam Geprek
+(3, 3, 6, 48000.00),  -- Es Teh Jumbo
+(4, 2, 4, 104000.00), -- Paket Ayam Krispi
+(4, 3, 4, 32000.00),
+(5, 1, 8, 224000.00),
+(5, 4, 4, 128000.00);
+
+-- 4. Sisipkan Proses Pembayaran DP/Pelunasan (Tabel pembayaran)
+INSERT INTO pembayaran (id_pembayaran, kode_transaksi, id_pesanan, id_reservasi, metode, total, status, waktu_bayar) VALUES
+(3, 'TRX-20251025-0140', 3, 1, 'QRIS', 400000.00, 'Lunas', '2026-10-25 14:02:00'),
+(4, 'TRX-20251025-0143', 4, 2, 'Tunai', 250000.00, 'Lunas', '2026-10-25 18:30:00'),
+(5, 'TRX-20251025-0144', 5, 3, 'QRIS', 550000.00, 'Lunas', '2026-10-25 19:00:00');
+
+-- 5. Rekapitulasi Laporan Penjualan Reservasi (Tabel transaksi)
+INSERT INTO transaksi (id_transaksi, id_pesanan, id_pembayaran, id_kas, metode_pembayaran, metode_pesanan, status_pembayaran, tanggal, total_bayar) VALUES
+(3, 3, 3, 1, 'QRIS', 'Reservasi (Lt. 2)', 'Lunas', '2026-10-25', 400000.00),
+(4, 4, 4, 1, 'Tunai', 'Reservasi (Lt. 1)', 'Lunas', '2026-10-25', 250000.00),
+(5, 5, 5, 1, 'QRIS', 'Reservasi (Lt. 1)', 'Lunas', '2026-10-25', 550000.00);
