@@ -1,21 +1,52 @@
 <?php
-// Memulai session untuk autentikasi & profil user
+// Memulai session untuk autentikasi & profil user/pelanggan
 session_start();
 
-// Panggil konfigurasi Database & Controller utama
+// Panggil konfigurasi Database & Controller Utama
 require_once __DIR__ . '/config/Database.php';
 require_once __DIR__ . '/controllers/LaporanPenjualanController.php';
 require_once __DIR__ . '/controllers/KasController.php';
 require_once __DIR__ . '/controllers/ExportController.php';
+require_once __DIR__ . '/controllers/MelaporkanKendalaController.php';
 
-// Menangkap rute halaman dari parameter URL (Default: internal-dashboard)
-$page = isset($_GET['page']) ? $_GET['page'] : 'internal-dashboard';
+// Menangkap rute halaman dari parameter URL (Default utama: 'home' / Dashboard Pelanggan)
+$page = isset($_GET['page']) ? $_GET['page'] : 'home';
 
 // Routing Saklar Utama (MVC Router)
 switch ($page) {
 
     // ========================================================
-    // HALAMAN INTERNAL (STAFF / ADMIN / KASIR / PELAYAN)
+    // HALAMAN UTAMA / DASHBOARD PELANGGAN (PUBLIC FRONTEND)
+    // ========================================================
+    case 'home':
+        // Menampilkan Dashboard Pelanggan (File: views/pelanggan/dashboard.php)
+        if (file_exists(__DIR__ . '/views/pelanggan/dashboard.php')) {
+            require_once __DIR__ . '/views/pelanggan/dashboard.php';
+        } else {
+            require_once __DIR__ . '/views/dashboard.php';
+        }
+        break;
+
+    case 'form-kendala':
+        // UC-08: Halaman Form Melaporkan Kendala / Contact Us
+        $kendalaController = new MelaporkanKendalaController();
+        $kendalaController->pilihMenuContactUs();
+        break;
+
+    case 'kirim-kendala':
+        // UC-08: Submit Form Laporan Kendala Pelanggan
+        $kendalaController = new MelaporkanKendalaController();
+        $kendalaController->tekanKirim();
+        break;
+
+    case 'hubungi-wa':
+        // UC-08: Direct Link Chat WhatsApp Admin
+        $kendalaController = new MelaporkanKendalaController();
+        $kendalaController->tekanHubungi();
+        break;
+
+    // ========================================================
+    // HALAMAN INTERNAL RESTORAN (STAFF / ADMIN / KASIR)
     // ========================================================
     case 'internal-dashboard':
         require_once __DIR__ . '/views/internal/admin/dashboard_staff.php';
@@ -39,7 +70,6 @@ switch ($page) {
         $exportController->tekanExportData();
         break;
 
-    // Rute Modul Tim Lain (Diteruskan ke view masing-masing folder aktor)
     case 'pos':
         require_once __DIR__ . '/views/internal/kasir/pos_kasir.php';
         break;
@@ -62,17 +92,15 @@ switch ($page) {
 
     case 'logout':
         session_destroy();
-        header("Location: index.php?page=internal-dashboard");
+        header("Location: index.php?page=home");
         exit();
 
-    // ========================================================
-    // HALAMAN PELANGGAN (PUBLIC)
-    // ========================================================
-    case 'form-kendala':
-        require_once __DIR__ . '/views/pelanggan/form_kendala.php';
-        break;
-
+    // Rute Default / Fallback: Kembali ke Dashboard Pelanggan (dashboard.php)
     default:
-        require_once __DIR__ . '/views/internal/admin/dashboard_staff.php';
+        if (file_exists(__DIR__ . '/views/pelanggan/dashboard.php')) {
+            require_once __DIR__ . '/views/pelanggan/dashboard.php';
+        } else {
+            require_once __DIR__ . '/views/dashboard.php';
+        }
         break;
 }

@@ -146,7 +146,7 @@ footer p{font-size:14px;color:var(--text-muted)}
   <div class="wrap">
     <nav class="nav" aria-label="Navigasi utama">
       <a class="brand" href="#home" style="text-decoration:none"><span class="logo" id="lg"></span>Maky Chicken</a>
-      <div class="links"><a class="on" href="#home">Home</a><a href="#menu">Menu</a><a href="#reservasi">Reservasi</a><a href="#contact">Contact Us</a></div>
+      <div class="links"><a class="on" href="#home">Home</a><a href="#menu">Menu</a><a href="#reservasi">Reservasi</a><a href="index.php?page=form-kendala">Contact Us</a></div>
       <button class="btn btn--accent btn--sm" id="cartBtn"><span id="cartIc"></span>Keranjang (<span id="cartN">0</span>)</button>
     </nav>
     <div class="hero-grid">
