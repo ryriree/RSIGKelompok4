@@ -54,3 +54,6 @@ INSERT INTO laporan_kendala (nama, kontak, jenis_laporan, isi_pesan, status) VAL
 -- 10. DATA KONTAK ADMIN
 INSERT INTO kontak_admin (id_user, nomor_whatsapp) VALUES
 (1, '081234567890');
+
+INSERT INTO users (username, password, nama, email, role, status_akun, akun_diblokir) VALUES
+('manajer1', '$2y$10$92IXMOqn3Jg3PfnxD3iB.54.16M0n7Xi', 'Bima Aditya', 'manajer@makychicken.com', 'Manajer', 'Aktif', FALSE);
