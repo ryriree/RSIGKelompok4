@@ -50,15 +50,15 @@
             
             <?php $activeKategori = $_GET['kategori'] ?? ''; ?>
             <div class="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-                <a href="index.php?action=melihat_menu" 
+                <a href="index.php?page=menu-pelanggan" 
                    class="px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition <?= empty($activeKategori) ? 'bg-[#0B192C] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' ?>">
                     Semua
                 </a>
-                <a href="index.php?action=melihat_menu&kategori=Makanan" 
+                <a href="index.php?page=menu-pelanggan&kategori=Makanan" 
                    class="px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition <?= $activeKategori === 'Makanan' ? 'bg-[#0B192C] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' ?>">
                     <i class="fa-solid fa-drumstick-bite mr-1"></i> Makanan
                 </a>
-                <a href="index.php?action=melihat_menu&kategori=Minuman" 
+                <a href="index.php?page=menu-pelanggan&kategori=Minuman" 
                    class="px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition <?= $activeKategori === 'Minuman' ? 'bg-[#0B192C] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200' ?>">
                     <i class="fa-solid fa-glass-water mr-1"></i> Minuman
                 </a>

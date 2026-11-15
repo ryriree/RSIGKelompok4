@@ -7,72 +7,106 @@ class KelolaReservasi
     {
         if (session_status() === PHP_SESSION_NONE) session_start();
 
-        if (($_SESSION['role'] ?? '') !== 'Admin') {
+        if (strtolower($_SESSION['role'] ?? '') !== 'admin') {
             http_response_code(403);
             exit('Akses ditolak');
         }
     }
 
-    public function get_reservasi($idReservasi = null)
-    {
-        $model = new ReservasiModel();
+    // ================== HALAMAN (GET) ==================
 
-        if ($idReservasi === null) {
-            $this->tampilkan_daftar_reservasi(
-                $model->getall_data_reservasi()
-            );
-            return;
-        }
+    // ?page=reservasi
+        // ?page=reservasi  (opsional &q=kata)
+ public function index()
+{
+    $q = trim($_GET['q'] ?? '');
+    $model = new ReservasiModel();
+    $data = $q !== '' ? $model->cari_data_reservasi($q) : $model->getall_data_reservasi();
 
-        $data = $model->get_data_reservasi($idReservasi);
-
-        if ($data) {
-            $this->tampilkan_form_ubah($data);
-        }
-    }
-
+    $this->render('daftar', ['daftarReservasi' => $data, 'data' => $data, 'q' => $q]);
+}
+    // ?page=reservasi-tambah-form
     public function form_tambah()
     {
         $this->tampilkan_form_tambah();
     }
 
-    public function tambah_reservasi($data)
+    // ?page=reservasi-ubah-form&id=3
+    public function form_ubah()
     {
+        $id = (int) ($_GET['id'] ?? 0);
+        $data = (new ReservasiModel())->get_data_reservasi($id);
+
+        if (!$data) {
+            $this->flash('Data reservasi tidak ditemukan.');
+            redirect('reservasi');
+        }
+        $this->tampilkan_form_ubah($data);
+    }
+
+    // ================== AKSI (POST) -> redirect ==================
+
+    // ?page=reservasi-tambah
+    public function proses_tambah()
+    {
+        $this->wajibPost();
+        $data = $_POST;
+
         if (!$this->validasi_data($data)) {
-            $this->tampilkan_pesan_kesalahan();
-            return false;
+            $this->flash('Data tidak valid. Periksa kembali isian form.');
+            redirect('reservasi-tambah-form');
         }
 
-        $model = new ReservasiModel();
-        $ok = $model->tambah_data_reservasi($data);
-
-        if ($ok) {
-            $this->tampilkan_daftar_reservasi(
-                $model->getall_data_reservasi()
-            );
-        }
-
-        return $ok;
+        $ok = (new ReservasiModel())->tambah_data_reservasi($data);
+        $this->flash($ok ? 'Reservasi berhasil ditambahkan.' : 'Gagal menambahkan reservasi.', $ok);
+        redirect('reservasi');
     }
 
-    public function ubah_reservasi($data)
+    // ?page=reservasi-ubah
+    public function proses_ubah()
     {
+        $this->wajibPost();
+        $data = $_POST;
+
         if (!$this->validasi_data($data) || empty($data['id_reservasi'])) {
-            $this->tampilkan_pesan_kesalahan();
-            return false;
+            $this->flash('Data tidak valid. Periksa kembali isian form.');
+            redirect('reservasi');
         }
 
-        $model = new ReservasiModel();
-        $ok = $model->ubah_data_reservasi($data);
-
-        if ($ok) {
-            $this->tampilkan_daftar_reservasi(
-                $model->getall_data_reservasi()
-            );
-        }
-
-        return $ok;
+        $ok = (new ReservasiModel())->ubah_data_reservasi($data);
+        $this->flash($ok ? 'Reservasi berhasil diubah.' : 'Gagal mengubah reservasi.', $ok);
+        redirect('reservasi');
     }
+
+    // ?page=reservasi-batal
+    public function proses_batal()
+    {
+        $this->wajibPost();
+        $id = (int) ($_POST['id_reservasi'] ?? 0);
+
+        $ok = (new ReservasiModel())->ubah_status_atau_hapus_data($id);
+        $this->flash($ok ? 'Reservasi dibatalkan.' : 'Gagal membatalkan reservasi.', $ok);
+        redirect('reservasi');
+    }
+
+    // ?page=reservasi-status-dp
+    public function proses_status_dp()
+    {
+        $this->wajibPost();
+        $id = (int) ($_POST['id_reservasi'] ?? 0);
+        $statusDP = $_POST['status_dp'] ?? '';
+
+        if (!in_array($statusDP, ['Belum Dibayar', 'Lunas'], true)) {
+            $this->flash('Status DP tidak valid.');
+            redirect('reservasi');
+        }
+
+        $ok = (new ReservasiModel())->ubah_data_status_dp($id, $statusDP);
+        $this->flash($ok ? 'Status DP diperbarui.' : 'Gagal memperbarui status DP.', $ok);
+        redirect('reservasi');
+    }
+
+    // ================== VALIDASI ==================
 
     private function validasi_data($data)
     {
@@ -88,69 +122,46 @@ class KelolaReservasi
         }
 
         $date = DateTime::createFromFormat('Y-m-d', $data['tanggal']);
-
         return $date && $date->format('Y-m-d') === $data['tanggal'];
     }
 
-    public function batalkan_reservasi($idReservasi)
-    {
-        $model = new ReservasiModel();
-        $ok = $model->ubah_status_atau_hapus_data($idReservasi);
-
-        if ($ok) {
-            $this->tampilkan_daftar_reservasi(
-                $model->getall_data_reservasi()
-            );
-        }
-
-        return $ok;
-    }
-
-    public function batal_konfirmasi()
-    {
-        $this->tutup_dialog_konfirmasi();
-    }
-
-    public function ubah_status_dp($idReservasi, $statusDP)
-    {
-        if (!in_array($statusDP, ['Belum Dibayar', 'Lunas'], true)) {
-            return false;
-        }
-
-        $model = new ReservasiModel();
-        $ok = $model->ubah_data_status_dp($idReservasi, $statusDP);
-
-        if ($ok) {
-            $this->tampilkan_daftar_reservasi(
-                $model->getall_data_reservasi()
-            );
-        }
-
-        return $ok;
-    }
+    // ================== TAMPILAN ==================
 
     public function tampilkan_daftar_reservasi($data)
     {
-        Respon::kirim('daftar_reservasi', $data);
+        $this->render('daftar', ['daftarReservasi' => $data, 'data' => $data]);
     }
 
     public function tampilkan_form_tambah()
     {
-        Respon::kirim('form_tambah');
+        $this->render('tambah');
     }
 
     public function tampilkan_form_ubah($data)
     {
-        Respon::kirim('form_ubah', $data);
+        $this->render('ubah', ['dataUbah' => $data]);
     }
 
-    public function tampilkan_pesan_kesalahan()
+    // ================== HELPER ==================
+
+    private function render($mode, $vars = [])
     {
-        Respon::kirim('pesan_kesalahan');
+        $flash = $_SESSION['flash_reservasi'] ?? null;
+        unset($_SESSION['flash_reservasi']);
+
+        extract($vars);
+        require BASE_PATH . '/views/internal/admin/KelolaReservasi.php';  // $mode: daftar | tambah | ubah
     }
 
-    public function tutup_dialog_konfirmasi()
+    private function flash($pesan, $sukses = false)
     {
-        Respon::kirim('tutup_dialog');
+        $_SESSION['flash_reservasi'] = ['pesan' => $pesan, 'sukses' => $sukses];
+    }
+
+    private function wajibPost()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('reservasi');
+        }
     }
 }

@@ -21,12 +21,13 @@ class LaporanKendalaInternal {
         return $this->conn->query($sql)->fetch(PDO::FETCH_ASSOC);
     }
 
-    public function getDaftarLaporan($keyword = '', $jenis = 'Semua', $status = 'Semua', $limit = 5, $offset = 0) {
+      public function getDaftarLaporan($keyword = '', $jenis = 'Semua', $status = 'Semua', $limit = 5, $offset = 0) {
         $sql = "SELECT lk.*, u.nama AS nama_penangan
                 FROM laporan_kendala lk
                 LEFT JOIN users u ON lk.id_user_penangan = u.id_user
-                WHERE (lk.nama LIKE :keyword OR lk.kontak LIKE :keyword OR lk.isi_pesan LIKE :keyword)";
-        $params = [':keyword' => '%' . $keyword . '%'];
+                WHERE (lk.nama LIKE :k1 OR lk.kontak LIKE :k2 OR lk.isi_pesan LIKE :k3)";
+        $like = '%' . $keyword . '%';
+        $params = [':k1' => $like, ':k2' => $like, ':k3' => $like];
 
         if ($jenis !== 'Semua' && in_array($jenis, ['Komplain', 'Feedback'], true)) {
             $sql .= " AND lk.jenis_laporan = :jenis";
@@ -50,8 +51,9 @@ class LaporanKendalaInternal {
 
     public function hitungDaftarLaporan($keyword = '', $jenis = 'Semua', $status = 'Semua') {
         $sql = "SELECT COUNT(*) FROM laporan_kendala
-                WHERE (nama LIKE :keyword OR kontak LIKE :keyword OR isi_pesan LIKE :keyword)";
-        $params = [':keyword' => '%' . $keyword . '%'];
+                WHERE (nama LIKE :k1 OR kontak LIKE :k2 OR isi_pesan LIKE :k3)";
+        $like = '%' . $keyword . '%';
+        $params = [':k1' => $like, ':k2' => $like, ':k3' => $like];
 
         if ($jenis !== 'Semua' && in_array($jenis, ['Komplain', 'Feedback'], true)) {
             $sql .= " AND jenis_laporan = :jenis";

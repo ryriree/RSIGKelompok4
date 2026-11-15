@@ -58,15 +58,50 @@ class UserModel
         return $stmt->execute([$username]);
     }
 
-    public function getall_data_staff()
+        public function getall_data_staff()
     {
         $stmt = $this->conn->query(
-            "SELECT id_user, nama, email, username, role, status_akun
+            "SELECT id_user, nama, email, username, role, status_akun, akun_diblokir
              FROM users
              ORDER BY nama ASC"
         );
-
         return $stmt->fetchAll();
+    }
+
+    public function cari_data_staff($q)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT id_user, nama, email, username, role, status_akun, akun_diblokir
+             FROM users
+             WHERE nama LIKE ? OR username LIKE ? OR email LIKE ?
+             ORDER BY nama ASC"
+        );
+        $like = '%' . $q . '%';
+        $stmt->execute([$like, $like, $like]);
+        return $stmt->fetchAll();
+    }
+
+    public function username_sudah_ada($username, $kecualiId = 0)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT COUNT(*) FROM users WHERE username = ? AND id_user <> ?"
+        );
+        $stmt->execute([$username, (int) $kecualiId]);
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    public function ubah_password($idUser, $passwordBaru)
+    {
+        $stmt = $this->conn->prepare("UPDATE users SET password = ? WHERE id_user = ?");
+        return $stmt->execute([password_hash($passwordBaru, PASSWORD_BCRYPT), (int) $idUser]);
+    }
+
+    public function buka_blokir($idUser)
+    {
+        $stmt = $this->conn->prepare(
+            "UPDATE users SET akun_diblokir = 0, status_akun = 'Aktif' WHERE id_user = ?"
+        );
+        return $stmt->execute([(int) $idUser]);
     }
 
     public function get_data_staff($idUser)

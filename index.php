@@ -1,106 +1,128 @@
 <?php
 // Memulai session untuk autentikasi & profil user/pelanggan
 session_start();
+define('BASE_PATH', __DIR__);
 
-// Panggil konfigurasi Database & Controller Utama
-require_once __DIR__ . '/config/Database.php';
-require_once __DIR__ . '/controllers/LaporanPenjualanController.php';
-require_once __DIR__ . '/controllers/KasController.php';
-require_once __DIR__ . '/controllers/ExportController.php';
-require_once __DIR__ . '/controllers/MelaporkanKendalaController.php';
+// Konfigurasi Database
+require_once BASE_PATH . '/config/Database.php';
 
-// Menangkap rute halaman dari parameter URL (Default utama: 'home' / Dashboard Pelanggan)
-$page = isset($_GET['page']) ? $_GET['page'] : 'home';
-
-// Routing Saklar Utama (MVC Router)
-switch ($page) {
-
-    // ========================================================
-    // HALAMAN UTAMA / DASHBOARD PELANGGAN (PUBLIC FRONTEND)
-    // ========================================================
-    case 'home':
-        // Menampilkan Dashboard Pelanggan (File: views/pelanggan/dashboard.php)
-        if (file_exists(__DIR__ . '/views/pelanggan/dashboard.php')) {
-            require_once __DIR__ . '/views/pelanggan/dashboard.php';
-        } else {
-            require_once __DIR__ . '/views/dashboard.php';
+// Autoload: controller & model dimuat otomatis saat class dipakai
+// (menggantikan require_once controller satu per satu & class_exists di tiap case)
+spl_autoload_register(function ($class) {
+    foreach (['controllers', 'models'] as $dir) {
+        $file = BASE_PATH . "/$dir/$class.php";
+        if (file_exists($file)) {
+            require_once $file;
+            return;
         }
-        break;
+    }
+});
 
-    case 'form-kendala':
-        // UC-08: Halaman Form Melaporkan Kendala / Contact Us
-        $kendalaController = new MelaporkanKendalaController();
-        $kendalaController->pilihMenuContactUs();
-        break;
+// ========================================================
+// HELPER
+// ========================================================
+function url($page)      { return 'index.php?page=' . $page; }
+function redirect($page) { header('Location: ' . url($page)); exit; }
 
-    case 'kirim-kendala':
-        // UC-08: Submit Form Laporan Kendala Pelanggan
-        $kendalaController = new MelaporkanKendalaController();
-        $kendalaController->tekanKirim();
-        break;
+// ========================================================
+// TABEL ROUTE
+// roles: null         = publik (tanpa login)
+//        ['*']        = semua staff yang sudah login
+//        ['kasir',..] = hanya role tertentu (huruf kecil)
+// Isi salah satu: 'c' + 'm' (controller + method) ATAU 'view' (file view langsung)
+// ========================================================
+$routes = [
 
-    case 'hubungi-wa':
-        // UC-08: Direct Link Chat WhatsApp Admin
-        $kendalaController = new MelaporkanKendalaController();
-        $kendalaController->tekanHubungi();
-        break;
+    // ===== DASHBOARD PELANGGAN (PUBLIC, tanpa login) =====
+    'home'          => ['view' => 'pelanggan/dashboard', 'roles' => null],
+    'menu-pelanggan' => ['c' => 'MenuController', 'm' => 'menuPelanggan', 'roles' => null],
 
-    // ========================================================
-    // HALAMAN INTERNAL RESTORAN (STAFF / ADMIN / KASIR)
-    // ========================================================
-    case 'internal-dashboard':
-        require_once __DIR__ . '/views/internal/admin/dashboard_staff.php';
-        break;
+    // UC-08: Melaporkan Kendala / Contact Us
+    'form-kendala'  => ['c' => 'MelaporkanKendalaController', 'm' => 'pilihMenuContactUs', 'roles' => null],
+    'kirim-kendala' => ['c' => 'MelaporkanKendalaController', 'm' => 'tekanKirim',          'roles' => null],
+    'hubungi-wa'    => ['c' => 'MelaporkanKendalaController', 'm' => 'tekanHubungi',        'roles' => null],
 
-    case 'laporan-penjualan':
-        // UC-14: Dashboard Laporan Penjualan (Eksekusi Controller)
-        $controller = new LaporanPenjualanController();
-        $controller->pilihMenuLaporanPenjualan();
-        break;
+    // ===== AUTH STAFF =====
+    'login'        => ['c' => 'Auth', 'm' => 'get_form_login', 'roles' => null],
+    'proses-login' => ['c' => 'Auth', 'm' => 'proses_login',   'roles' => null],
+    'logout'       => ['c' => 'Auth', 'm' => 'logout',         'roles' => null],
 
-    case 'simpan-kas':
-        // UC-15: Eksekusi Simpan Kas Fisik Kasir
-        $kasController = new KasController();
-        $kasController->tekanSimpan();
-        break;
+    // ===== DASHBOARD STAFF (semua role yang sudah login) =====
+    'internal-dashboard' => ['view' => 'internal/admin/dashboard_staff', 'roles' => ['*'], 'layout' => 'staff'],
+    // ===== ADMIN =====
+    'reservasi'           => ['c' => 'KelolaReservasi', 'm' => 'index',            'roles' => ['admin'], 'layout' => 'staff'],
+    'reservasi-tambah'    => ['c' => 'KelolaReservasi', 'm' => 'proses_tambah',    'roles' => ['admin']],
+    'reservasi-ubah'      => ['c' => 'KelolaReservasi', 'm' => 'proses_ubah',      'roles' => ['admin']],
+    'reservasi-batal'     => ['c' => 'KelolaReservasi', 'm' => 'proses_batal',     'roles' => ['admin']],
+    'reservasi-status-dp' => ['c' => 'KelolaReservasi', 'm' => 'proses_status_dp', 'roles' => ['admin']],
+    'kelola-akun'          => ['c' => 'KelolaStaff', 'm' => 'index',          'roles' => ['admin'], 'layout' => 'staff'],
 
-    case 'export-excel':
-        // UC-16: Eksekusi Download File Excel Laporan Penjualan
-        $exportController = new ExportController();
-        $exportController->tekanExportData();
-        break;
+    // ===== Kelola Akun Staff (Admin) =====
+    'kelola-akun'          => ['c' => 'KelolaStaff', 'm' => 'index',          'roles' => ['admin'], 'layout' => 'staff'],
+    'staff-simpan'         => ['c' => 'KelolaStaff', 'm' => 'simpan',         'roles' => ['admin']],
+    'staff-status'         => ['c' => 'KelolaStaff', 'm' => 'ubah_status',    'roles' => ['admin']],
+    'staff-buka-blokir'    => ['c' => 'KelolaStaff', 'm' => 'buka_blokir',    'roles' => ['admin']],
+    'staff-reset-password' => ['c' => 'KelolaStaff', 'm' => 'reset_password', 'roles' => ['admin']],
+    'laporan-kendala'     => ['c' => 'LaporanKendalaController', 'm' => 'tampilkanDaftar', 'roles' => ['admin', 'manajer'], 'layout' => 'staff'],
+    'ubah-status-laporan' => ['c' => 'LaporanKendalaController', 'm' => 'ubahStatus',      'roles' => ['admin']],
+    // UC-14: Dashboard Laporan Penjualan
+    'laporan-penjualan' => ['c' => 'LaporanPenjualanController', 'm' => 'pilihMenuLaporanPenjualan', 'roles' => ['manajer', 'admin'], 'layout' => 'staff'],
+      // UC-15: Simpan Kas Fisik
+    'simpan-kas'        => ['c' => 'KasController',  'm' => 'tekanSimpan',       'roles' => ['admin']],
+    // UC-16: Download Excel Laporan Penjualan
+    'export-excel'      => ['c' => 'ExportController', 'm' => 'tekanExportData', 'roles' => ['admin']],
 
-    case 'pos':
-        require_once __DIR__ . '/views/internal/kasir/pos_kasir.php';
-        break;
+    // ===== KASIR =====
+    'pos'               => ['view' => 'internal/kasir/Kasir_pos', 'roles' => ['kasir'], 'layout' => 'staff'],
+    // Kelola Menu (tampil, simpan tambah/edit, toggle aktif/nonaktif)
+      'kelola-menu'       => ['c' => 'MenuController', 'm' => 'tampilkanMenu',    'roles' => ['kasir'], 'layout' => 'staff'],
+      'simpan-menu'       => ['c' => 'MenuController', 'm' => 'simpanMenu',       'roles' => ['kasir']],
+      'ubah-ketersediaan' => ['c' => 'MenuController', 'm' => 'ubahKetersediaan', 'roles' => ['kasir']],
 
-    case 'reservasi':
-        require_once __DIR__ . '/views/internal/admin/manajemen_reservasi.php';
-        break;
+    // ===== PELAYAN =====
+    'status-pesanan' => ['view' => 'internal/Pelayan/status_pesanan', 'roles' => ['pelayan'], 'layout' => 'staff'],
+];
 
-    case 'kelola-menu':
-        require_once __DIR__ . '/views/internal/admin/kelola_menu.php';
-        break;
+// ========================================================
+// DISPATCHER
+// ========================================================
+$page = $_GET['page'] ?? 'home';
 
-    case 'kelola-akun':
-        require_once __DIR__ . '/views/internal/admin/kelola_akun.php';
-        break;
+// Rute tidak dikenal -> kembali ke Dashboard Pelanggan
+if (!isset($routes[$page])) {
+    $page = 'home';
+}
 
-    case 'laporan-kendala':
-        require_once __DIR__ . '/views/internal/admin/daftar_kendala.php';
-        break;
+$route = $routes[$page];
 
-    case 'logout':
-        session_destroy();
-        header("Location: index.php?page=home");
-        exit();
+// Guard: cek login & role untuk halaman staff
+if ($route['roles'] !== null) {
+    if (empty($_SESSION['userId'])) {
+        redirect('login');
+    }
 
-    // Rute Default / Fallback: Kembali ke Dashboard Pelanggan (dashboard.php)
-    default:
-        if (file_exists(__DIR__ . '/views/pelanggan/dashboard.php')) {
-            require_once __DIR__ . '/views/pelanggan/dashboard.php';
-        } else {
-            require_once __DIR__ . '/views/dashboard.php';
-        }
-        break;
+    $role = strtolower($_SESSION['role'] ?? '');
+
+    if ($route['roles'] !== ['*'] && !in_array($role, $route['roles'])) {
+        http_response_code(403);
+        exit('Anda tidak punya akses ke halaman ini');
+    }
+}
+
+// Eksekusi (output ditampung dulu agar bisa dibungkus layout)
+ob_start();
+
+if (isset($route['c'])) {
+    $controller = new $route['c']();
+    $controller->{$route['m']}();
+} else {
+    require BASE_PATH . '/views/' . $route['view'] . '.php';
+}
+
+$content = ob_get_clean();
+
+if (($route['layout'] ?? null) === 'staff') {
+    require BASE_PATH . '/views/layout/staff.php';
+} else {
+    echo $content;
 }

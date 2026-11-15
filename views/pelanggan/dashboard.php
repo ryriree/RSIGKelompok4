@@ -146,7 +146,7 @@ footer p{font-size:14px;color:var(--text-muted)}
   <div class="wrap">
     <nav class="nav" aria-label="Navigasi utama">
       <a class="brand" href="#home" style="text-decoration:none"><span class="logo" id="lg"></span>Maky Chicken</a>
-      <div class="links"><a class="on" href="#home">Home</a><a href="#menu">Menu</a><a href="#reservasi">Reservasi</a><a href="index.php?page=form-kendala">Contact Us</a></div>
+      <div class="links"><a class="on" href="#home">Home</a><a href="index.php?page=menu-pelanggan">Menu</a><a href="#reservasi">Reservasi</a><a href="index.php?page=form-kendala">Contact Us</a></div>
       <button class="btn btn--accent btn--sm" id="cartBtn"><span id="cartIc"></span>Keranjang (<span id="cartN">0</span>)</button>
     </nav>
     <div class="hero-grid">
@@ -155,9 +155,9 @@ footer p{font-size:14px;color:var(--text-muted)}
         <h1>Rasa yang beda,<br>pasti ketagihan!</h1>
         <p>Sensasi ayam krispi renyah keemasan berpadu sambal korek pedas gurih khas Maky Chicken. Pesan langsung dari meja tanpa antre kasir atau booking lantai favoritmu sekarang!</p>
         <div class="cta">
-          <a class="btn btn--accent" href="#menu" id="qrBtn"></a>
-          <a class="btn btn--accent" href="#reservasi" id="rsBtn"></a>
-          <a class="btn btn--accent" href="#contact" id="hbBtn"></a>
+          <a class="btn btn--accent" href="index.php?page=menu-pelanggan" id="qrBtn"></a>
+          <a class="btn btn--accent" href="index.php?page=form-reservasi" id="rsBtn"></a>
+          <a class="btn btn--accent" href="index.php?page=form-kendala" id="hbBtn"></a>
         </div>
       </div>
       <div class="photo" role="img" aria-label="Foto Ayam Geprek Sambal Korek"><span id="phIc"></span><span class="float">Sambal Bawang Korek</span></div>

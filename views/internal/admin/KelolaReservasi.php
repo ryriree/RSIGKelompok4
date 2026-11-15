@@ -1,388 +1,189 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Tampilan saja. Data dikirim oleh KelolaReservasi (controller):
+// $daftarReservasi, $q (kata kunci), $flash ['pesan','sukses']
+$daftarReservasi = $daftarReservasi ?? [];
+$q = $q ?? '';
 
-// Sertakan file koneksi (naik 3 level folder dari views/internal/admin ke root)
-require_once '../../../koneksi.php';
-
-$notifSukses = $_SESSION['notif_sukses'] ?? null;
-$notifError  = $_SESSION['notif_error'] ?? null;
-unset($_SESSION['notif_sukses'], $_SESSION['notif_error']);
-
-// 1. PROSES TAMBAH RESERVASI MANUAL (OFFLINE / WALK-IN)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['tambah_reservasi'])) {
-    $nama     = trim($_POST['nama_pemesan'] ?? '');
-    $kontak   = trim($_POST['kontak_pemesanan'] ?? '');
-    $tanggal  = $_POST['tanggal'] ?? '';
-    $slot     = $_POST['slot_waktu'] ?? '18:30 WIB';
-    $lantai   = (int)($_POST['lantai'] ?? 1);
-    $pax      = (int)($_POST['jumlah_orang'] ?? 2);
-    $statusDp = $_POST['status_dp'] ?? 'Lunas';
-    $dpNominal = 50000.00;
-
-    if (empty($nama) || empty($kontak) || empty($tanggal)) {
-        $_SESSION['notif_error'] = "Harap lengkapi semua bidang form reservasi!";
-    } else {
-        try {
-            $kodeBooking = 'RES-' . date('Ymd') . '-' . rand(100, 999);
-            $stmt = $pdo->prepare("INSERT INTO reservasi (kode_booking, nama_pemesan, kontak_pemesanan, tanggal, slot_waktu, lantai, jumlah_orang, dp, total, status, status_dp) 
-                VALUES (:kode, :nama, :kontak, :tgl, :slot, :lantai, :pax, :dp, :total, 'Confirmed', :status_dp)");
-            
-            $stmt->execute([
-                ':kode'      => $kodeBooking,
-                ':nama'      => $nama,
-                ':kontak'    => $kontak,
-                ':tgl'       => $tanggal,
-                ':slot'      => $slot,
-                ':lantai'    => $lantai,
-                ':pax'       => $pax,
-                ':dp'        => $dpNominal,
-                ':total'     => $dpNominal,
-                ':status_dp' => $statusDp
-            ]);
-
-            $_SESSION['notif_sukses'] = "Reservasi offline berhasil dibuat dengan Kode: $kodeBooking";
-            header("Location: admin_reservasi.php");
-            exit;
-        } catch (PDOException $e) {
-            $_SESSION['notif_error'] = "Gagal menyimpan reservasi: " . $e->getMessage();
-        }
-    }
-}
-
-// 2. PROSES AKSI (BATALKAN RESERVASI / UPDATE STATUS DP)
-if (isset($_GET['action'])) {
-    $idRes = (int)($_GET['id'] ?? 0);
-    
-    if ($_GET['action'] === 'batalkan' && $idRes > 0) {
-        $stmt = $pdo->prepare("UPDATE reservasi SET status = 'Dibatalkan', status_dp = 'Batal' WHERE id_reservasi = :id");
-        $stmt->execute([':id' => $idRes]);
-        $_SESSION['notif_sukses'] = "Reservasi telah berhasil dibatalkan.";
-        header("Location: admin_reservasi.php");
-        exit;
-    }
-    
-    if ($_GET['action'] === 'lunas_dp' && $idRes > 0) {
-        $stmt = $pdo->prepare("UPDATE reservasi SET status_dp = 'Lunas', status = 'Confirmed' WHERE id_reservasi = :id");
-        $stmt->execute([':id' => $idRes]);
-        $_SESSION['notif_sukses'] = "Status DP berhasil diperbarui menjadi Lunas.";
-        header("Location: admin_reservasi.php");
-        exit;
-    }
-}
-
-// 3. SEARCH & FETCH DATA RESERVASI FROM DATABASE
-$search = trim($_GET['q'] ?? '');
-if (!empty($search)) {
-    $stmt = $pdo->prepare("SELECT * FROM reservasi WHERE nama_pemesan LIKE :q OR kode_booking LIKE :q ORDER BY id_reservasi DESC");
-    $stmt->execute([':q' => "%$search%"]);
-} else {
-    $stmt = $pdo->query("SELECT * FROM reservasi ORDER BY id_reservasi DESC");
-}
-$listReservasi = $stmt->fetchAll();
-
-// 4. STATISTIK RINGKAS
-$totalAll       = count($listReservasi);
-$totalConfirmed = count(array_filter($listReservasi, fn($r) => $r['status'] === 'Confirmed'));
-$totalPending   = count(array_filter($listReservasi, fn($r) => $r['status'] === 'Pending'));
-$totalBatal     = count(array_filter($listReservasi, fn($r) => $r['status'] === 'Dibatalkan'));
+$totalAll       = count($daftarReservasi);
+$totalConfirmed = count(array_filter($daftarReservasi, fn($r) => $r['status'] === 'Confirmed'));
+$totalPending   = count(array_filter($daftarReservasi, fn($r) => $r['status'] === 'Pending'));
+$totalBatal     = count(array_filter($daftarReservasi, fn($r) => $r['status'] === 'Dibatalkan'));
 ?>
+<style>
+.rs { font-size: 13px; }
+.rs .desc { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+.rs .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+.rs .search { display: flex; flex: 1; min-width: 240px; max-width: 420px; }
+.rs .search input { width: 100%; height: 42px; border-radius: 999px; border: 1.5px solid var(--cream-300); background: #fff; padding: 0 18px; font-size: 12px; outline: none; }
+.rs .search input:focus { border-color: var(--red-600); }
+.rs .count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+.rs .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--red-600); color: #fff; font-weight: 700; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.rs .btn:hover { background: var(--red-700); }
+.rs .btn--ghost { background: transparent; color: var(--text); border: 1.5px solid var(--border); }
+.rs .btn--sm { min-height: 30px; padding: 0 12px; font-size: 10px; }
+.rs .btn--ok { background: var(--success); }
 
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UC-02 Kelola Data Reservasi Pelanggan - Maky Chicken</title>
+.rs .notif { padding: 12px 16px; border-radius: 14px; font-weight: 600; font-size: 12px; margin-bottom: 16px; }
+.rs .notif--ok  { background: var(--green-100); color: var(--success); border: 1px solid #b7e4c7; }
+.rs .notif--err { background: var(--red-100); color: var(--red-700); border: 1px solid #f1b5b0; }
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Titan+One&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+.rs .kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.rs .kpi div { background: #fff; border: 1.5px solid var(--cream-300); border-radius: 18px; padding: 16px 18px; box-shadow: var(--shadow-1); }
+.rs .kpi span { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); display: block; }
+.rs .kpi b { font-family: var(--font-display); font-weight: 400; font-size: 28px; display: block; margin-top: 4px; }
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'red-brand': '#B3131B',
-                        'red-dark': '#8E0F18',
-                        'red-light': '#FBE0DD',
-                        'cream-bg': '#FFF3DC',
-                        'cream-light': '#FFFAF0',
-                        'cream-border': '#F2D49A',
-                        'text-main': '#2A1010',
-                        'text-muted': '#6B4A45',
-                        'yellow-accent': '#FFB21E',
-                        'green-status': '#1E8E4E'
-                    },
-                    fontFamily: {
-                        headline: ['Epilogue'],
-                        body: ['Plus Jakarta Sans'],
-                        display: ['Titan One']
-                    }
-                }
-            }
-        }
-    </script>
-</head>
+.rs .wrap { background: #fff; border: 1.5px solid var(--cream-300); border-radius: 20px; overflow-x: auto; box-shadow: var(--shadow-1); }
+.rs table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rs th { background: var(--red-600); color: #fff; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 14px 14px; text-align: left; white-space: nowrap; }
+.rs td { padding: 12px 14px; border-bottom: 1px solid var(--cream-200); vertical-align: middle; }
+.rs tr:nth-child(even) td { background: var(--cream-50); }
+.rs .kode { font-weight: 700; color: var(--red-600); font-family: monospace; white-space: nowrap; }
+.rs .pill { display: inline-flex; padding: 2px 10px; border-radius: 999px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.rs .p-ok   { background: var(--green-100); color: var(--success); }
+.rs .p-wait { background: var(--yellow-100); color: var(--yellow-600); }
+.rs .p-info { background: var(--blue-100); color: var(--info); }
+.rs .p-bad  { background: var(--red-100); color: var(--red-700); }
+.rs .p-gray { background: #eee; color: #555; }
+.rs .aksi { display: flex; gap: 6px; justify-content: center; }
+.rs .aksi form { margin: 0; }
+.rs .kosong { text-align: center; padding: 32px; color: var(--text-muted); font-style: italic; }
 
-<body class="bg-cream-bg text-text-main font-body min-h-screen p-4 sm:p-8">
+.rs-overlay { position: fixed; inset: 0; background: rgba(94,10,16,.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 1000; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .25s; }
+.rs-overlay.on { opacity: 1; pointer-events: auto; }
+.rs-modal { background: #fff; border-radius: 24px; box-shadow: var(--shadow-3); padding: 24px; max-width: 520px; width: 100%; border: 1.5px solid var(--cream-300); font-size: 13px; max-height: 92vh; overflow-y: auto; }
+.rs-modal label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+.rs-modal input, .rs-modal select { width: 100%; min-height: 42px; border-radius: 12px; border: 1.5px solid var(--cream-300); padding: 0 12px; background: #fff; font-size: 12px; }
+.rs-modal .row { display: grid; gap: 12px; margin-bottom: 12px; }
+.rs-modal .r2 { grid-template-columns: 1fr 1fr; }
+.rs-modal .r3 { grid-template-columns: 1fr 1fr 1fr; }
 
-    <div class="max-w-7xl mx-auto space-y-6">
+@media (max-width: 1024px) { .rs .kpi { grid-template-columns: repeat(2, 1fr); } }
+</style>
 
-        <!-- HEADER SECTION -->
-        <div class="bg-red-brand text-cream-light p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
-            <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-red-dark rounded-full blur-2xl opacity-50"></div>
-            
-            <div class="relative z-10 space-y-1">
-                <div class="inline-flex items-center gap-2 bg-yellow-accent text-text-main px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                    <span class="material-symbols-outlined text-sm">table_restaurant</span>
-                    MODUL AKTOR: ADMIN / STAFF
-                </div>
-                <h1 class="font-display text-2xl sm:text-3xl tracking-wide">
-                    MANAJEMEN RESERVASI MEJA (UC-02)
-                </h1>
-                <p class="text-xs text-cream-light/90">
-                    Kelola reservasi pelanggan, entri pesanan walk-in/offline, serta konfirmasi status DP.
-                </p>
-            </div>
+<div class="rs">
+    <p class="desc">Kelola reservasi pelanggan, entri pesanan walk-in/offline, serta konfirmasi status DP.</p>
 
-            <div class="relative z-10 flex gap-2">
-                <button onclick="toggleModalTambah()" class="px-5 py-3 bg-yellow-accent text-text-main font-bold rounded-full text-xs shadow-md hover:bg-amber-400 transition-all flex items-center gap-1.5">
-                    <span class="material-symbols-outlined text-sm">add_circle</span>
-                    + RESERVASI OFFLINE
-                </button>
-                <a href="dashboard_staff.php" class="px-4 py-3 bg-red-dark text-white rounded-full text-xs font-bold hover:bg-black/20 transition-all flex items-center">
-                    &larr; DASHBOARD
-                </a>
-            </div>
-        </div>
+    <?php if (!empty($flash)): ?>
+        <div class="notif <?= $flash['sukses'] ? 'notif--ok' : 'notif--err' ?>"><?= htmlspecialchars($flash['pesan']) ?></div>
+    <?php endif; ?>
 
-        <!-- NOTIFIKASI -->
-        <?php if ($notifSukses): ?>
-            <div class="p-4 bg-green-100 border border-green-300 text-green-800 text-xs font-bold rounded-2xl flex items-center gap-2">
-                <span class="material-symbols-outlined">check_circle</span>
-                <?= htmlspecialchars($notifSukses) ?>
-            </div>
-        <?php endif; ?>
-        <?php if ($notifError): ?>
-            <div class="p-4 bg-red-light border border-red-300 text-red-brand text-xs font-bold rounded-2xl flex items-center gap-2">
-                <span class="material-symbols-outlined">error</span>
-                <?= htmlspecialchars($notifError) ?>
-            </div>
-        <?php endif; ?>
-
-        <!-- METRIC CARDS -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="bg-cream-light p-5 rounded-2xl border border-cream-border shadow-sm">
-                <span class="text-[11px] font-bold text-text-muted uppercase tracking-wider block">Total Reservasi</span>
-                <span class="font-display text-2xl text-text-main mt-1 block"><?= $totalAll ?></span>
-            </div>
-            <div class="bg-cream-light p-5 rounded-2xl border border-cream-border shadow-sm">
-                <span class="text-[11px] font-bold text-green-status uppercase tracking-wider block">Terkonfirmasi</span>
-                <span class="font-display text-2xl text-green-status mt-1 block"><?= $totalConfirmed ?></span>
-            </div>
-            <div class="bg-cream-light p-5 rounded-2xl border border-cream-border shadow-sm">
-                <span class="text-[11px] font-bold text-yellow-600 uppercase tracking-wider block">Menunggu Konfirmasi</span>
-                <span class="font-display text-2xl text-yellow-600 mt-1 block"><?= $totalPending ?></span>
-            </div>
-            <div class="bg-cream-light p-5 rounded-2xl border border-cream-border shadow-sm">
-                <span class="text-[11px] font-bold text-red-brand uppercase tracking-wider block">Dibatalkan</span>
-                <span class="font-display text-2xl text-red-brand mt-1 block"><?= $totalBatal ?></span>
-            </div>
-        </div>
-
-        <!-- SEARCH & FILTER BAR -->
-        <div class="bg-cream-light p-4 rounded-2xl border border-cream-border shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
-            <form method="GET" action="" class="w-full sm:w-96 relative flex items-center">
-                <span class="material-symbols-outlined absolute left-3 text-text-muted text-lg">search</span>
-                <input 
-                    type="text" 
-                    name="q" 
-                    value="<?= htmlspecialchars($search) ?>" 
-                    placeholder="Cari Kode Booking / Nama Pemesan..." 
-                    class="w-full bg-white border border-cream-border rounded-full py-2.5 pl-10 pr-4 text-xs focus:outline-none focus:border-red-brand"
-                >
-            </form>
-            <div class="text-xs text-text-muted">
-                Menampilkan <strong><?= count($listReservasi) ?></strong> data reservasi
-            </div>
-        </div>
-
-        <!-- TABEL RESERVASI -->
-        <div class="bg-cream-light rounded-3xl border border-cream-border shadow-md overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-red-brand text-cream-light text-[11px] uppercase font-bold tracking-wider">
-                        <tr>
-                            <th class="p-4">Kode Booking</th>
-                            <th class="p-4">Nama Pemesan</th>
-                            <th class="p-4">Kontak (WA)</th>
-                            <th class="p-4">Jadwal & Waktu</th>
-                            <th class="p-4 text-center">Lantai / Meja</th>
-                            <th class="p-4 text-center">Tamu</th>
-                            <th class="p-4">Status DP</th>
-                            <th class="p-4">Status Booking</th>
-                            <th class="p-4 text-center">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-cream-border text-xs">
-                        <?php if (empty($listReservasi)): ?>
-                            <tr>
-                                <td colspan="9" class="p-8 text-center text-text-muted italic">
-                                    Belum ada data reservasi yang tercatat dalam database.
-                                </td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($listReservasi as $r): ?>
-                                <tr class="hover:bg-amber-50/60 transition-colors">
-                                    <td class="p-4 font-bold text-red-brand font-mono">
-                                        <?= htmlspecialchars($r['kode_booking']) ?>
-                                    </td>
-                                    <td class="p-4 font-bold text-text-main">
-                                        <?= htmlspecialchars($r['nama_pemesan']) ?>
-                                    </td>
-                                    <td class="p-4 text-text-muted">
-                                        <?= htmlspecialchars($r['kontak_pemesanan']) ?>
-                                    </td>
-                                    <td class="p-4">
-                                        <div class="font-semibold"><?= htmlspecialchars($r['tanggal']) ?></div>
-                                        <div class="text-[10px] text-text-muted"><?= htmlspecialchars($r['slot_waktu']) ?></div>
-                                    </td>
-                                    <td class="p-4 text-center">
-                                        <span class="px-2.5 py-1 bg-cream-bg rounded-lg font-bold border border-cream-border">
-                                            Lantai <?= htmlspecialchars($r['lantai']) ?>
-                                        </span>
-                                    </td>
-                                    <td class="p-4 text-center font-bold">
-                                        <?= htmlspecialchars($r['jumlah_orang']) ?> Pax
-                                    </td>
-                                    <td class="p-4">
-                                        <?php if ($r['status_dp'] === 'Lunas'): ?>
-                                            <span class="px-2.5 py-1 bg-green-100 text-green-700 font-bold rounded-full text-[10px] inline-flex items-center gap-1">
-                                                <span class="material-symbols-outlined text-xs">check_circle</span> LUNAS
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px] inline-flex items-center gap-1">
-                                                <span class="material-symbols-outlined text-xs">pending</span> PENDING
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="p-4">
-                                        <?php if ($r['status'] === 'Confirmed'): ?>
-                                            <span class="px-2.5 py-1 bg-blue-100 text-blue-700 font-bold rounded-full text-[10px]">Confirmed</span>
-                                        <?php elseif ($r['status'] === 'Dibatalkan'): ?>
-                                            <span class="px-2.5 py-1 bg-red-100 text-red-700 font-bold rounded-full text-[10px]">Dibatalkan</span>
-                                        <?php else: ?>
-                                            <span class="px-2.5 py-1 bg-gray-100 text-gray-700 font-bold rounded-full text-[10px]"><?= htmlspecialchars($r['status']) ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="p-4 text-center">
-                                        <div class="flex items-center justify-center gap-1.5">
-                                            <?php if ($r['status_dp'] !== 'Lunas' && $r['status'] !== 'Dibatalkan'): ?>
-                                                <a href="?action=lunas_dp&id=<?= $r['id_reservasi'] ?>" title="Tandai DP Lunas" class="p-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                                                    <span class="material-symbols-outlined text-sm">payments</span>
-                                                </a>
-                                            <?php endif; ?>
-
-                                            <?php if ($r['status'] !== 'Dibatalkan'): ?>
-                                                <a href="?action=batalkan&id=<?= $r['id_reservasi'] ?>" onclick="return confirm('Apakah Anda yakin ingin membatalkan reservasi ini?')" title="Batalkan Reservasi" class="p-1.5 bg-red-brand text-white rounded-lg hover:bg-red-dark">
-                                                    <span class="material-symbols-outlined text-sm">cancel</span>
-                                                </a>
-                                            <?php else: ?>
-                                                <span class="text-[10px] text-text-muted italic">-</span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <div class="bar">
+        <form method="GET" action="index.php" class="search">
+            <input type="hidden" name="page" value="reservasi">
+            <input type="text" name="q" value="<?= htmlspecialchars($q) ?>" placeholder="Cari kode booking / nama pemesan...">
+        </form>
+        <button type="button" class="btn" onclick="bukaModalRs()">+ Reservasi Offline</button>
+        <span class="count">Menampilkan <b><?= $totalAll ?></b> data reservasi</span>
     </div>
 
-    <!-- MODAL FORM TAMBAH RESERVASI OFFLINE / WALK-IN -->
-    <div id="modalTambah" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-cream-light w-full max-w-lg rounded-3xl p-6 sm:p-8 border border-cream-border shadow-2xl space-y-4 relative">
-            <button onclick="toggleModalTambah()" class="absolute top-5 right-5 text-text-muted hover:text-red-brand">
-                <span class="material-symbols-outlined">close</span>
-            </button>
+    <div class="kpi">
+        <div><span>Total Reservasi</span><b><?= $totalAll ?></b></div>
+        <div><span style="color:var(--success)">Terkonfirmasi</span><b style="color:var(--success)"><?= $totalConfirmed ?></b></div>
+        <div><span style="color:var(--yellow-600)">Menunggu Konfirmasi</span><b style="color:var(--yellow-600)"><?= $totalPending ?></b></div>
+        <div><span style="color:var(--red-600)">Dibatalkan</span><b style="color:var(--red-600)"><?= $totalBatal ?></b></div>
+    </div>
 
-            <div class="space-y-1">
-                <h3 class="font-display text-xl text-red-brand">INPUT RESERVASI OFFLINE</h3>
-                <p class="text-xs text-text-muted">Entri reservasi langsung di outlet (walk-in atau telepon).</p>
+    <div class="wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Kode Booking</th><th>Nama Pemesan</th><th>Kontak (WA)</th><th>Jadwal</th>
+                    <th style="text-align:center">Lantai</th><th style="text-align:center">Tamu</th>
+                    <th>Status DP</th><th>Status Booking</th><th style="text-align:center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($daftarReservasi)): ?>
+                <tr><td colspan="9" class="kosong">Belum ada data reservasi yang tercatat.</td></tr>
+            <?php else: foreach ($daftarReservasi as $r):
+                $batal = $r['status'] === 'Dibatalkan';
+                $lunas = $r['status_dp'] === 'Lunas';
+            ?>
+                <tr>
+                    <td class="kode"><?= htmlspecialchars($r['kode_booking']) ?></td>
+                    <td><b><?= htmlspecialchars($r['nama_pemesan']) ?></b></td>
+                    <td><?= htmlspecialchars($r['kontak_pemesanan']) ?></td>
+                    <td><b><?= htmlspecialchars($r['tanggal']) ?></b><br><small style="color:var(--text-muted)"><?= htmlspecialchars($r['slot_waktu']) ?></small></td>
+                    <td style="text-align:center"><b>Lt. <?= htmlspecialchars($r['lantai']) ?></b></td>
+                    <td style="text-align:center"><b><?= (int)$r['jumlah_orang'] ?> Pax</b></td>
+                    <td><span class="pill <?= $lunas ? 'p-ok' : 'p-wait' ?>"><?= $lunas ? 'LUNAS' : 'BELUM DIBAYAR' ?></span></td>
+                    <td>
+                        <?php if ($r['status'] === 'Confirmed'): ?><span class="pill p-info">Confirmed</span>
+                        <?php elseif ($batal): ?><span class="pill p-bad">Dibatalkan</span>
+                        <?php else: ?><span class="pill p-gray"><?= htmlspecialchars($r['status']) ?></span><?php endif; ?>
+                    </td>
+                    <td>
+                        <div class="aksi">
+                            <?php if (!$lunas && !$batal): ?>
+                                <form method="POST" action="index.php?page=reservasi-status-dp">
+                                    <input type="hidden" name="id_reservasi" value="<?= (int)$r['id_reservasi'] ?>">
+                                    <input type="hidden" name="status_dp" value="Lunas">
+                                    <button class="btn btn--sm btn--ok" type="submit">Lunaskan DP</button>
+                                </form>
+                            <?php endif; ?>
+                            <?php if (!$batal): ?>
+                                <form method="POST" action="index.php?page=reservasi-batal" onsubmit="return confirm('Yakin membatalkan reservasi ini?')">
+                                    <input type="hidden" name="id_reservasi" value="<?= (int)$r['id_reservasi'] ?>">
+                                    <button class="btn btn--sm" type="submit">Batalkan</button>
+                                </form>
+                            <?php else: ?>
+                                <span style="color:var(--text-muted)">-</span>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                </tr>
+            <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL RESERVASI OFFLINE -->
+<div class="rs-overlay" id="rsModal" onclick="if(event.target===this) tutupModalRs()">
+    <div class="rs-modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h3 class="disp" style="color:var(--red-600); font-size:20px;">INPUT RESERVASI OFFLINE</h3>
+            <button type="button" onclick="tutupModalRs()" style="border:0; background:none; font-size:18px; cursor:pointer; color:var(--text-muted);">✕</button>
+        </div>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Entri reservasi langsung di outlet (walk-in atau telepon).</p>
+
+        <form method="POST" action="index.php?page=reservasi-tambah">
+            <div class="row">
+                <div><label>Nama Pemesan *</label><input type="text" name="nama_pemesan" required placeholder="Nama pemesan"></div>
             </div>
-
-            <form method="POST" action="" class="space-y-4 pt-2">
-                <input type="hidden" name="tambah_reservasi" value="1">
-
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold">Nama Pemesan *</label>
-                    <input type="text" name="nama_pemesan" required class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand" placeholder="Masukkan nama pemesan">
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <label class="block text-xs font-bold">No. WhatsApp *</label>
-                        <input type="tel" name="kontak_pemesanan" required class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand" placeholder="08xxxxxxxx">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-xs font-bold">Tanggal Kunjungan *</label>
-                        <input type="date" name="tanggal" value="<?= date('Y-m-d') ?>" required class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-3 gap-3">
-                    <div class="space-y-1">
-                        <label class="block text-xs font-bold">Slot Waktu</label>
-                        <select name="slot_waktu" class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand">
-                            <option value="11:30 WIB">11:30 WIB</option>
-                            <option value="13:00 WIB">13:00 WIB</option>
-                            <option value="17:00 WIB">17:00 WIB</option>
-                            <option value="18:30 WIB" selected>18:30 WIB</option>
-                            <option value="19:45 WIB">19:45 WIB</option>
-                            <option value="20:30 WIB">20:30 WIB</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-xs font-bold">Lantai</label>
-                        <select name="lantai" class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand">
-                            <option value="1">Lantai 1</option>
-                            <option value="2">Lantai 2</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-xs font-bold">Jumlah Tamu</label>
-                        <input type="number" name="jumlah_orang" value="4" min="1" class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand">
-                    </div>
-                </div>
-
-                <div class="space-y-1">
-                    <label class="block text-xs font-bold">Status DP (Uang Muka Rp50.000)</label>
-                    <select name="status_dp" class="w-full bg-white border border-cream-border rounded-xl p-3 text-xs focus:outline-none focus:border-red-brand">
-                        <option value="Lunas" selected>LUNAS (Bayar Tunai/QRIS)</option>
-                        <option value="Pending">PENDING (Bayar Nanti)</option>
+            <div class="row r2">
+                <div><label>No. WhatsApp *</label><input type="tel" name="kontak_pemesanan" required placeholder="08xxxxxxxx"></div>
+                <div><label>Tanggal *</label><input type="date" name="tanggal" value="<?= date('Y-m-d') ?>" required></div>
+            </div>
+            <div class="row r3">
+                <div><label>Slot Waktu</label>
+                    <select name="slot_waktu">
+                        <?php foreach (['11:30 WIB','13:00 WIB','14:00 WIB','17:00 WIB','18:30 WIB','19:00 WIB','19:45 WIB','20:30 WIB'] as $s): ?>
+                            <option value="<?= $s ?>" <?= $s === '18:30 WIB' ? 'selected' : '' ?>><?= $s ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
-
-                <div class="pt-3">
-                    <button type="submit" class="w-full py-3.5 bg-red-brand text-white font-bold rounded-full text-xs shadow-lg hover:bg-red-dark transition-all">
-                        SIMPAN RESERVASI BARU
-                    </button>
+                <div><label>Lantai</label><select name="lantai"><option value="1">Lantai 1</option><option value="2">Lantai 2</option></select></div>
+                <div><label>Jumlah Tamu</label><input type="number" name="jumlah_orang" value="4" min="1"></div>
+            </div>
+            <div class="row">
+                <div><label>Status DP (uang muka Rp50.000)</label>
+                    <select name="status_dp">
+                        <option value="Lunas">LUNAS (bayar tunai/QRIS)</option>
+                        <option value="Belum Dibayar">BELUM DIBAYAR (bayar nanti)</option>
+                    </select>
                 </div>
-            </form>
-        </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                <button type="button" class="btn btn--ghost" onclick="tutupModalRs()">Batal</button>
+                <button type="submit" class="btn">Simpan Reservasi</button>
+            </div>
+        </form>
     </div>
+</div>
 
-    <!-- JAVASCRIPT MODAL -->
-    <script>
-        function toggleModalTambah() {
-            const modal = document.getElementById('modalTambah');
-            modal.classList.toggle('hidden');
-        }
-    </script>
-</body>
-</html>
+<script>
+function bukaModalRs()  { document.getElementById('rsModal').classList.add('on'); }
+function tutupModalRs() { document.getElementById('rsModal').classList.remove('on'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') tutupModalRs(); });
+</script>

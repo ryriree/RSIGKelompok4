@@ -4,7 +4,6 @@ require_once __DIR__ . '/../models/UserModel.php';
 class Auth
 {
     const BATAS_GAGAL = 3;
-
     private $username;
 
     public function __construct()
@@ -12,47 +11,52 @@ class Auth
         if (session_status() === PHP_SESSION_NONE) session_start();
     }
 
+    // GET ?page=login
     public function get_form_login()
     {
-        $this->tampilkan_form_login();
+        if (!empty($_SESSION['userId'])) redirect('internal-dashboard');
+
+        $pesan = $_SESSION['flash_login'] ?? null;
+        unset($_SESSION['flash_login']);
+        require BASE_PATH . '/views/auth/login_staff.php';   // pakai variabel $pesan
+    }
+
+    // POST ?page=proses-login
+    public function proses_login()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect('login');
+
+        $ok = $this->login($_POST['username'] ?? '', $_POST['password'] ?? '');
+        redirect($ok ? 'internal-dashboard' : 'login');
     }
 
     public function login($username, $password)
     {
         $this->username = trim($username);
         $model = new UserModel();
-        $user = $model->get_data_user($this->username, $password);
+        $user  = $model->get_data_user($this->username, $password);
 
         if ($user !== null && !empty($user['akun_diblokir'])) {
-            $this->tampilkan_akun_diblokir();
+            $_SESSION['flash_login'] = 'Akun diblokir. Hubungi Admin.';
             return false;
         }
 
         if ($user !== null && ($user['status_akun'] ?? '') === 'Aktif') {
             session_regenerate_id(true);
-            $_SESSION['userId'] = $user['id_user'];
-            $_SESSION['role'] = $user['role'];
+            $_SESSION['userId']     = $user['id_user'];
+            $_SESSION['role']       = $user['role'];
+            $_SESSION['nama']       = $user['nama'] ?? '';   // sesuaikan nama kolom, dipakai di sidebar
             $_SESSION['waktuLogin'] = date('Y-m-d H:i:s');
             $_SESSION['percobaan_gagal'][$this->username] = 0;
-
-            if ($user['role'] === 'Admin') {
-                $this->tampilkan_dashboard_admin($user);
-            } else {
-                $this->tampilkan_dashboard_operasional($user);
-            }
-
             return true;
         }
 
-        $jumlah = $this->hitung_percobaan_gagal();
-
-        if ($jumlah >= self::BATAS_GAGAL) {
+        if ($this->hitung_percobaan_gagal() >= self::BATAS_GAGAL) {
             $model->blokir_akun($this->username);
-            $this->tampilkan_akun_diblokir();
+            $_SESSION['flash_login'] = 'Akun diblokir. Hubungi Admin.';
         } else {
-            $this->tampilkan_login_gagal();
+            $_SESSION['flash_login'] = 'Login gagal. Username atau password salah.';
         }
-
         return false;
     }
 
@@ -66,47 +70,12 @@ class Auth
     public function logout()
     {
         $_SESSION = [];
-
         if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-
-            setcookie(
-                session_name(),
-                '',
-                time() - 42000,
-                $params['path'],
-                $params['domain'],
-                $params['secure'],
-                $params['httponly']
-            );
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000,
+                $p['path'], $p['domain'], $p['secure'], $p['httponly']);
         }
-
         session_destroy();
-        $this->tampilkan_form_login();
-    }
-
-    public function tampilkan_form_login()
-    {
-        Respon::kirim('form_login');
-    }
-
-    public function tampilkan_login_gagal()
-    {
-        Respon::kirim('login_gagal', ['pesan' => 'Login gagal']);
-    }
-
-    public function tampilkan_akun_diblokir()
-    {
-        Respon::kirim('akun_diblokir', ['pesan' => 'Akun diblokir. Hubungi Admin.']);
-    }
-
-    public function tampilkan_dashboard_operasional($data)
-    {
-        Respon::kirim('dashboard_operasional', $data);
-    }
-
-    public function tampilkan_dashboard_admin($data)
-    {
-        Respon::kirim('dashboard_admin', $data);
+        redirect('login');
     }
 }

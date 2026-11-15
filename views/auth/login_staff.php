@@ -1,64 +1,9 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Sertakan file koneksi (naik 2 level folder dari views/auth ke root)
-require_once '../../koneksi.php';
-
+// Variabel $pesan dikirim oleh Auth::get_form_login()
+$notifError  = $pesan ?? null;
 $notifSukses = $_SESSION['notif_sukses'] ?? null;
-$notifError  = $_SESSION['notif_error'] ?? null;
-
-unset($_SESSION['notif_sukses'], $_SESSION['notif_error']);
-
-// LOGIKA AUTENTIKASI DATABASE (UC-04)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-
-    if (empty($username) || empty($password)) {
-        $notifError = "Harap isi username dan kata sandi!";
-    } else {
-        try {
-            // Cari user di DB berdasarkan username dan pastikan status_akun = 'Aktif'
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username AND status_akun = 'Aktif' LIMIT 1");
-            $stmt->execute([':username' => $username]);
-            $user = $stmt->fetch();
-
-            // Verifikasi Password (Mendukung password hash DB / fallback default)
-            if ($user && (password_verify($password, $user['password']) || $password === 'admin123' || $password === 'MakyCrispy2024!')) {
-                // Set Data Session
-                $_SESSION['user_id']  = $user['id_user'];
-                $_SESSION['nama']     = $user['nama'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['role']     = $user['role'];
-                $_SESSION['email']    = $user['email'];
-
-                // Redirection Otomatis Berdasarkan Role Akses Ke Folder Internal
-                $role = strtolower($user['role']);
-                if ($role === 'admin') {
-                    header('Location: ../internal/admin/dashboard_staff.php');
-                    exit;
-                } elseif ($role === 'kasir') {
-                    header('Location: ../internal/kasir/antrean_pos.php');
-                    exit;
-                } elseif ($role === 'pelayan') {
-                    header('Location: ../internal/pelayan/dashboard.php');
-                    exit;
-                } else {
-                    header('Location: ../internal/admin/dashboard_staff.php');
-                    exit;
-                }
-            } else {
-                $notifError = "Username atau kata sandi salah, atau akun Anda belum diaktifkan Admin.";
-            }
-        } catch (PDOException $e) {
-            $notifError = "Terjadi kesalahan sistem: " . $e->getMessage();
-        }
-    }
-}
+unset($_SESSION['notif_sukses']);
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -267,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
 
                 <!-- LOGIN FORM -->
-                <form method="POST" action="" class="space-y-5" id="loginForm">
+                <form method="POST" action="index.php?page=proses-login" class="space-y-5" id="loginForm">
 
                     <!-- USERNAME -->
                     <div class="space-y-1.5">

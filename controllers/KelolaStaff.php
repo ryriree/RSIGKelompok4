@@ -3,144 +3,139 @@ require_once __DIR__ . '/../models/UserModel.php';
 
 class KelolaStaff
 {
-    const ROLE_VALID = [
-        'Admin',
-        'Manajer',
-        'Kasir',
-        'Pelayan'
-    ];
+    const ROLE_VALID = ['Admin', 'Manajer', 'Kasir', 'Pelayan'];
 
-    public function __construct()
+    // ?page=kelola-akun (opsional &q=kata)
+    public function index()
     {
-        if (session_status() === PHP_SESSION_NONE) session_start();
+        $q = trim($_GET['q'] ?? '');
+        $model = new UserModel();
+        $daftarStaff = $q !== '' ? $model->cari_data_staff($q) : $model->getall_data_staff();
 
-        if (($_SESSION['role'] ?? '') !== 'Admin') {
-            http_response_code(403);
-            exit('Akses ditolak');
-        }
+        $flash = $_SESSION['flash_staff'] ?? null;
+        unset($_SESSION['flash_staff']);
+        $idSaya = (int) ($_SESSION['userId'] ?? 0);
+
+        require BASE_PATH . '/views/internal/admin/KelolaAkunStaff.php';
     }
 
-    public function get_staff($idUser = null)
+    // ?page=staff-simpan (POST): id_user kosong = tambah, terisi = ubah
+    public function simpan()
     {
+        $this->wajibPost();
         $model = new UserModel();
 
-        if ($idUser === null) {
-            $this->tampilkan_daftar_staff(
-                $model->getall_data_staff()
-            );
-            return;
+        $id   = (int) ($_POST['id_user'] ?? 0);
+        $data = [
+            'nama'     => trim($_POST['nama'] ?? ''),
+            'email'    => trim($_POST['email'] ?? ''),
+            'username' => trim($_POST['username'] ?? ''),
+            'role'     => $_POST['role'] ?? '',
+            'password' => $_POST['password'] ?? '',
+        ];
+
+        if (!$this->validasi_data($data)) {
+            $this->flash('Data tidak valid. Periksa nama, email, username, dan role.');
+            redirect('kelola-akun');
+        }
+        if ($model->username_sudah_ada($data['username'], $id)) {
+            $this->flash('Username "' . $data['username'] . '" sudah dipakai staff lain.');
+            redirect('kelola-akun');
         }
 
-        $data = $model->get_data_staff($idUser);
-
-        if ($data) {
-            $this->tampilkan_form_ubah($data);
+        if ($id > 0) {
+            // Admin tidak boleh mengubah role akunnya sendiri
+            if ($id === (int) ($_SESSION['userId'] ?? 0)) {
+                $lama = $model->get_data_staff($id);
+                $data['role'] = $lama['role'] ?? $data['role'];
+            }
+            $ok = $model->ubah_data_staff($id, $data);
+            $this->flash($ok ? 'Data staff berhasil diubah.' : 'Gagal mengubah data staff.', $ok);
+        } else {
+            if (strlen($data['password']) < 8) {
+                $this->flash('Kata sandi awal minimal 8 karakter.');
+                redirect('kelola-akun');
+            }
+            $data['status_akun'] = 'Aktif';
+            $ok = $model->tambah_data_staff($data);
+            $this->flash($ok ? 'Akun staff baru berhasil didaftarkan.' : 'Gagal menyimpan akun staff.', $ok);
         }
+        redirect('kelola-akun');
     }
 
-    public function form_tambah()
+    // ?page=staff-status (POST): Aktif <-> Nonaktif
+    public function ubah_status()
     {
-        $this->tampilkan_form_tambah();
-    }
+        $this->wajibPost();
+        $id = (int) ($_POST['id_user'] ?? 0);
 
-    public function tambah_staff(
-        $nama,
-        $email,
-        $username,
-        $role,
-        $password
-    ) {
-        $data = compact('nama', 'email', 'username', 'role', 'password');
-
-        if (!$this->validasi_data($data) || strlen($password) < 8) {
-            $this->tampilkan_pesan_data_tidak_valid();
-            return false;
-        }
-
-        $data['status_akun'] = 'Aktif';
-
-        $model = new UserModel();
-        $ok = $model->tambah_data_staff($data);
-
-        if ($ok) {
-            $this->tampilkan_daftar_staff(
-                $model->getall_data_staff()
-            );
-        }
-
-        return $ok;
-    }
-
-    public function ubah_staff($idUser, $dataStaff)
-    {
-        if (!$this->validasi_data($dataStaff)) {
-            $this->tampilkan_pesan_data_tidak_valid();
-            return false;
+        if ($id === (int) ($_SESSION['userId'] ?? 0)) {
+            $this->flash('Anda tidak dapat menonaktifkan akun Anda sendiri.');
+            redirect('kelola-akun');
         }
 
         $model = new UserModel();
-        $ok = $model->ubah_data_staff($idUser, $dataStaff);
-
-        if ($ok) {
-            $this->tampilkan_daftar_staff(
-                $model->getall_data_staff()
-            );
+        $staff = $model->get_data_staff($id);
+        if (!$staff || $staff['status_akun'] === 'Diblokir') {
+            $this->flash('Akun tidak ditemukan, atau sedang diblokir (gunakan Buka Blokir).');
+            redirect('kelola-akun');
         }
 
-        return $ok;
+        $baru = $staff['status_akun'] === 'Aktif' ? 'Nonaktif' : 'Aktif';
+        $ok = $model->ubah_status_akun($id, $baru);
+        $this->flash($ok ? "Status akun menjadi $baru." : 'Gagal mengubah status akun.', $ok);
+        redirect('kelola-akun');
     }
 
-    private function validasi_data($data)
+    // ?page=staff-buka-blokir (POST)
+    public function buka_blokir()
     {
-        return
-            !empty($data['nama']) &&
-            !empty($data['email']) &&
-            !empty($data['username']) &&
-            filter_var($data['email'], FILTER_VALIDATE_EMAIL) &&
-            in_array($data['role'], self::ROLE_VALID, true);
+        $this->wajibPost();
+        $id = (int) ($_POST['id_user'] ?? 0);
+        $ok = $id > 0 && (new UserModel())->buka_blokir($id);
+        $this->flash($ok ? 'Blokir akun dibuka. Akun aktif kembali.' : 'Gagal membuka blokir.', $ok);
+        redirect('kelola-akun');
     }
 
-    public function nonaktifkan_staff($idUser)
+    // ?page=staff-reset-password (POST): password acak, ditampilkan sekali
+    public function reset_password()
     {
+        $this->wajibPost();
+        $id = (int) ($_POST['id_user'] ?? 0);
+
         $model = new UserModel();
-        $ok = $model->ubah_status_akun($idUser, 'Nonaktif');
-
-        if ($ok) {
-            $this->tampilkan_daftar_staff(
-                $model->getall_data_staff()
-            );
+        $staff = $model->get_data_staff($id);
+        if (!$staff) {
+            $this->flash('Akun tidak ditemukan.');
+            redirect('kelola-akun');
         }
 
-        return $ok;
+        $baru = substr(bin2hex(random_bytes(6)), 0, 10);
+        $ok = $model->ubah_password($id, $baru);
+        $this->flash(
+            $ok ? 'Password @' . $staff['username'] . ' direset menjadi: ' . $baru . ' (catat sekarang, tidak ditampilkan lagi).'
+                : 'Gagal mereset password.',
+            $ok
+        );
+        redirect('kelola-akun');
     }
 
-    public function batal_konfirmasi()
+    private function validasi_data($d)
     {
-        $this->tutup_dialog_konfirmasi();
+        return $d['nama'] !== '' && $d['username'] !== ''
+            && filter_var($d['email'], FILTER_VALIDATE_EMAIL)
+            && in_array($d['role'], self::ROLE_VALID, true);
     }
 
-    public function tampilkan_daftar_staff($data)
+    private function flash($pesan, $sukses = false)
     {
-        Respon::kirim('daftar_staff', $data);
+        $_SESSION['flash_staff'] = ['pesan' => $pesan, 'sukses' => $sukses];
     }
 
-    public function tampilkan_form_tambah()
+    private function wajibPost()
     {
-        Respon::kirim('form_tambah');
-    }
-
-    public function tampilkan_form_ubah($data)
-    {
-        Respon::kirim('form_ubah', $data);
-    }
-
-    public function tampilkan_pesan_data_tidak_valid()
-    {
-        Respon::kirim('data_tidak_valid');
-    }
-
-    public function tutup_dialog_konfirmasi()
-    {
-        Respon::kirim('tutup_dialog');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('kelola-akun');
+        }
     }
 }

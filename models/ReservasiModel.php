@@ -125,6 +125,18 @@ class ReservasiModel
         return $stmt->fetchAll();
     }
 
+    public function cari_data_reservasi($q)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT * FROM reservasi
+             WHERE nama_pemesan LIKE ? OR kode_booking LIKE ?
+             ORDER BY tanggal DESC, slot_waktu ASC"
+        );
+        $like = '%' . $q . '%';
+        $stmt->execute([$like, $like]);
+        return $stmt->fetchAll();
+    }
+
     public function get_data_reservasi($idReservasi)
     {
         $stmt = $this->conn->prepare(
@@ -141,22 +153,16 @@ class ReservasiModel
     public function tambah_data_reservasi($data)
     {
         try {
-            $kode = 'BK-' . strtoupper(bin2hex(random_bytes(4)));
+            $kode = 'RES-' . date('Ymd') . '-' . random_int(100, 999);
+            $statusDp = in_array($data['status_dp'] ?? '', ['Lunas', 'Belum Dibayar'], true)
+                ? $data['status_dp'] : 'Belum Dibayar';
+            $dp = 50000.00;
 
             $stmt = $this->conn->prepare(
                 "INSERT INTO reservasi
-                (
-                    kode_booking,
-                    nama_pemesan,
-                    kontak_pemesanan,
-                    tanggal,
-                    slot_waktu,
-                    jumlah_orang,
-                    lantai,
-                    status,
-                    status_dp
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'Confirmed', 'Belum Dibayar')"
+                 (kode_booking, nama_pemesan, kontak_pemesanan, tanggal, slot_waktu,
+                  lantai, jumlah_orang, dp, total, status, status_dp)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Confirmed', ?)"
             );
 
             return $stmt->execute([
@@ -165,10 +171,12 @@ class ReservasiModel
                 $data['kontak_pemesanan'],
                 $data['tanggal'],
                 $data['slot_waktu'],
+                (int) $data['lantai'],
                 (int) $data['jumlah_orang'],
-                (int) $data['lantai']
+                $dp,
+                $dp,
+                $statusDp
             ]);
-
         } catch (Throwable $e) {
             error_log($e->getMessage());
             return false;
