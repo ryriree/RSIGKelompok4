@@ -1,6 +1,7 @@
 <?php
 // Memulai session untuk autentikasi & profil user/pelanggan
 session_start();
+date_default_timezone_set('Asia/Jakarta');
 define('BASE_PATH', __DIR__);
 
 // Konfigurasi Database
@@ -35,8 +36,15 @@ $routes = [
 
     // ===== DASHBOARD PELANGGAN (PUBLIC, tanpa login) =====
     'home'          => ['view' => 'pelanggan/dashboard', 'roles' => null],
-    'menu-pelanggan' => ['c' => 'MenuController', 'm' => 'menuPelanggan', 'roles' => null],
-
+    'menu-pelanggan' => ['c' => 'MenuController',   'm' => 'menuPelanggan', 'roles' => null],
+        // ===== PELANGGAN: Pesan -> Bayar -> Invoice =====
+    'pesan'        => ['c' => 'PesananController',    'm' => 'formPesan',      'roles' => null, 'layout' => 'pelanggan'],
+    'pesan-kirim'  => ['c' => 'PesananController',    'm' => 'kirimPesanan',   'roles' => null],
+    'bayar'        => ['c' => 'PembayaranController', 'm' => 'index',          'roles' => null, 'layout' => 'pelanggan'],
+    'bayar-qris'   => ['c' => 'PembayaranController', 'm' => 'konfirmasiQris', 'roles' => null],
+    'bayar-status' => ['c' => 'PembayaranController', 'm' => 'status',         'roles' => null],
+    'invoice'      => ['c' => 'PembayaranController', 'm' => 'invoice',        'roles' => null, 'layout' => 'pelanggan'],
+    
     // UC-08: Melaporkan Kendala / Contact Us
     'form-kendala'  => ['c' => 'MelaporkanKendalaController', 'm' => 'pilihMenuContactUs', 'roles' => null],
     'kirim-kendala' => ['c' => 'MelaporkanKendalaController', 'm' => 'tekanKirim',          'roles' => null],
@@ -50,12 +58,20 @@ $routes = [
     // ===== DASHBOARD STAFF (semua role yang sudah login) =====
     'internal-dashboard' => ['view' => 'internal/admin/dashboard_staff', 'roles' => ['*'], 'layout' => 'staff'],
     // ===== ADMIN =====
-    'reservasi'           => ['c' => 'KelolaReservasi', 'm' => 'index',            'roles' => ['admin'], 'layout' => 'staff'],
-    'reservasi-tambah'    => ['c' => 'KelolaReservasi', 'm' => 'proses_tambah',    'roles' => ['admin']],
-    'reservasi-ubah'      => ['c' => 'KelolaReservasi', 'm' => 'proses_ubah',      'roles' => ['admin']],
-    'reservasi-batal'     => ['c' => 'KelolaReservasi', 'm' => 'proses_batal',     'roles' => ['admin']],
-    'reservasi-status-dp' => ['c' => 'KelolaReservasi', 'm' => 'proses_status_dp', 'roles' => ['admin']],
-    'kelola-akun'          => ['c' => 'KelolaStaff', 'm' => 'index',          'roles' => ['admin'], 'layout' => 'staff'],
+       // ===== PELANGGAN: Reservasi 4 langkah =====
+    'form-reservasi'             => ['c' => 'Reservasi', 'm' => 'get_form_reservasi',  'roles' => null, 'layout' => 'pelanggan'],
+    'reservasi-slot'             => ['c' => 'Reservasi', 'm' => 'slotTerisi',          'roles' => null],
+    'reservasi-jadwal'           => ['c' => 'Reservasi', 'm' => 'prosesJadwal',        'roles' => null],
+    'reservasi-lantai'           => ['c' => 'Reservasi', 'm' => 'stepLantai',          'roles' => null, 'layout' => 'pelanggan'],
+    'reservasi-lantai-simpan'    => ['c' => 'Reservasi', 'm' => 'prosesLantai',        'roles' => null],
+    'reservasi-paket'            => ['c' => 'Reservasi', 'm' => 'stepPaket',           'roles' => null, 'layout' => 'pelanggan'],
+    'reservasi-paket-simpan'     => ['c' => 'Reservasi', 'm' => 'prosesPaket',         'roles' => null],
+    'reservasi-bayar'            => ['c' => 'Reservasi', 'm' => 'stepBayar',           'roles' => null, 'layout' => 'pelanggan'],
+    'reservasi-bayar-konfirmasi' => ['c' => 'Reservasi', 'm' => 'konfirmasiBayar',     'roles' => null],
+    'reservasi-voucher'          => ['c' => 'Reservasi', 'm' => 'voucher',             'roles' => null, 'layout' => 'pelanggan'],
+    'reservasi-unduh'            => ['c' => 'Reservasi', 'm' => 'unduhVoucher',        'roles' => null],
+    'reservasi-draft-batal'      => ['c' => 'Reservasi', 'm' => 'batalkan_reservasi',  'roles' => null],
+   
 
     // ===== Kelola Akun Staff (Admin) =====
     'kelola-akun'          => ['c' => 'KelolaStaff', 'm' => 'index',          'roles' => ['admin'], 'layout' => 'staff'],
@@ -73,14 +89,18 @@ $routes = [
     'export-excel'      => ['c' => 'ExportController', 'm' => 'tekanExportData', 'roles' => ['admin']],
 
     // ===== KASIR =====
-    'pos'               => ['view' => 'internal/kasir/Kasir_pos', 'roles' => ['kasir'], 'layout' => 'staff'],
+        // ===== KASIR =====
+    'pos'       => ['c' => 'PosController', 'm' => 'index', 'roles' => ['kasir'], 'layout' => 'staff'],
+    'pos-bayar' => ['c' => 'PosController', 'm' => 'bayar', 'roles' => ['kasir']],
+    'struk'     => ['c' => 'StrukController', 'm' => 'index',  'roles' => ['kasir'], 'layout' => 'staff'],
     // Kelola Menu (tampil, simpan tambah/edit, toggle aktif/nonaktif)
       'kelola-menu'       => ['c' => 'MenuController', 'm' => 'tampilkanMenu',    'roles' => ['kasir'], 'layout' => 'staff'],
       'simpan-menu'       => ['c' => 'MenuController', 'm' => 'simpanMenu',       'roles' => ['kasir']],
       'ubah-ketersediaan' => ['c' => 'MenuController', 'm' => 'ubahKetersediaan', 'roles' => ['kasir']],
 
     // ===== PELAYAN =====
-    'status-pesanan' => ['view' => 'internal/Pelayan/status_pesanan', 'roles' => ['pelayan'], 'layout' => 'staff'],
+     'status-pesanan' => ['c' => 'PesananController', 'm' => 'statusPelayan', 'roles' => ['pelayan'], 'layout' => 'staff'],
+    'pesanan-status' => ['c' => 'PesananController', 'm' => 'updateStatus',  'roles' => ['pelayan']],
 ];
 
 // ========================================================
@@ -121,8 +141,12 @@ if (isset($route['c'])) {
 
 $content = ob_get_clean();
 
-if (($route['layout'] ?? null) === 'staff') {
+$layout = $route['layout'] ?? null;
+
+if ($layout === 'staff') {
     require BASE_PATH . '/views/layout/staff.php';
+} elseif ($layout === 'pelanggan') {
+    require BASE_PATH . '/views/layout/pelanggan.php';
 } else {
     echo $content;
 }

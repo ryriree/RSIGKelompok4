@@ -4,6 +4,7 @@ require_once __DIR__ . '/pendukung.php';
 class ReservasiModel
 {
     private PDO $conn;
+    public $galat = '';
 
     public function __construct()
     {
@@ -25,6 +26,25 @@ class ReservasiModel
         return $stmt->fetchAll();
     }
 
+    // [slot_waktu => jumlah tamu terisi] untuk satu tanggal
+    public function get_terisi_per_slot($tanggal)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT slot_waktu, SUM(jumlah_orang) AS terisi
+             FROM reservasi
+             WHERE tanggal = ? AND status <> 'Dibatalkan'
+             GROUP BY slot_waktu"
+        );
+        $stmt->execute([$tanggal]);
+
+        $hasil = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $hasil[$r['slot_waktu']] = (int) $r['terisi'];
+        }
+        return $hasil;
+    }
+
+    // (tidak dipakai lagi oleh alur pelanggan, dibiarkan agar tidak merusak kode lain)
     public function simpan_draft_lantai($lantai)
     {
         $_SESSION['draft_detail']['lantai'] = (int) $lantai;
@@ -38,80 +58,84 @@ class ReservasiModel
         return true;
     }
 
-    public function simpan_reservasi($dataReservasi, $status)
+    // Reservasi pelanggan setelah DP terverifikasi: reservasi + detail + pembayaran DP dalam satu transaksi.
+    // Mengembalikan kode booking, atau false (alasan ada di $this->galat).
+    public function simpan_reservasi($d, $status)
     {
-        if (
-            empty($_SESSION['draft_detail']['paketId']) ||
-            empty($_SESSION['draft_detail']['qty'])
-        ) {
-            return false;
-        }
+        $this->galat = '';
 
         try {
             $this->conn->beginTransaction();
 
-            $sql = "INSERT INTO reservasi
-                (
-                    kode_booking,
-                    nama_pemesan,
-                    kontak_pemesanan,
-                    tanggal,
-                    slot_waktu,
-                    jumlah_orang,
-                    lantai,
-                    subtotal,
-                    service_fee,
-                    total,
-                    dp,
-                    status,
-                    status_dp
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-            $stmt = $this->conn->prepare($sql);
-
-            $stmt->execute([
-                $dataReservasi['kode_booking'],
-                $dataReservasi['nama_pemesan'],
-                $dataReservasi['kontak_pemesanan'],
-                $dataReservasi['tanggal'],
-                $dataReservasi['slot_waktu'],
-                $dataReservasi['jumlah_orang'],
-                $dataReservasi['lantai'],
-                $dataReservasi['subtotal'],
-                $dataReservasi['service_fee'],
-                $dataReservasi['total'],
-                $dataReservasi['dp'],
-                $status,
-                'Lunas'
-            ]);
-
-            $idReservasi = $this->conn->lastInsertId();
-
-            $detail = $this->conn->prepare(
-                "INSERT INTO detail_reservasi
-                (id_reservasi, id_paket, qty, subtotal)
-                VALUES (?, ?, ?, ?)"
+            // Kunci baris jadwal ini lalu cek ulang kapasitas (mencegah dua pelanggan merebut slot terakhir)
+            $cek = $this->conn->prepare(
+                "SELECT COALESCE(SUM(jumlah_orang), 0) FROM reservasi
+                 WHERE tanggal = ? AND slot_waktu = ? AND status <> 'Dibatalkan' FOR UPDATE"
             );
+            $cek->execute([$d['tanggal'], $d['slot_waktu']]);
+            if ((int) $cek->fetchColumn() + (int) $d['jumlah_orang'] > (int) $d['kapasitas']) {
+                $this->conn->rollBack();
+                $this->galat = 'Maaf, jadwal ini baru saja penuh. Pilih slot lain.';
+                return false;
+            }
 
-            $detail->execute([
-                $idReservasi,
-                $_SESSION['draft_detail']['paketId'],
-                $_SESSION['draft_detail']['qty'],
-                $dataReservasi['subtotal']
+            $kode = null;
+            for ($i = 0; $i < 5 && $kode === null; $i++) {
+                $coba = 'RES-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(2)));
+                $ada = $this->conn->prepare("SELECT 1 FROM reservasi WHERE kode_booking = ?");
+                $ada->execute([$coba]);
+                if (!$ada->fetchColumn()) $kode = $coba;
+            }
+            if ($kode === null) throw new RuntimeException('Gagal membuat kode booking');
+
+            $stmt = $this->conn->prepare(
+                "INSERT INTO reservasi
+                 (kode_booking, nama_pemesan, kontak_pemesanan, tanggal, slot_waktu, jumlah_orang,
+                  lantai, subtotal, service_fee, total, dp, status, status_dp)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Lunas')"
+            );
+            $stmt->execute([
+                $kode, $d['nama_pemesan'], $d['kontak_pemesanan'], $d['tanggal'], $d['slot_waktu'],
+                $d['jumlah_orang'], $d['lantai'], $d['subtotal'], $d['service_fee'], $d['total'],
+                $d['dp'], $status
             ]);
+            $idReservasi = (int) $this->conn->lastInsertId();
+
+            $det = $this->conn->prepare(
+                "INSERT INTO detail_reservasi (id_reservasi, id_paket, qty, subtotal) VALUES (?, ?, ?, ?)"
+            );
+            $det->execute([$idReservasi, $d['paket_id'], $d['qty'], $d['subtotal']]);
+
+            $pay = $this->conn->prepare(
+                "INSERT INTO pembayaran (kode_transaksi, id_reservasi, metode, total, status, waktu_bayar)
+                 VALUES (?, ?, 'QRIS', ?, 'Lunas', NOW())"
+            );
+            $pay->execute([$d['kode_transaksi'], $idReservasi, $d['dp']]);
 
             $this->conn->commit();
-            return true;
-
+            return $kode;
         } catch (Throwable $e) {
             if ($this->conn->inTransaction()) {
                 $this->conn->rollBack();
             }
-
             error_log($e->getMessage());
+            $this->galat = 'Reservasi gagal disimpan. Silakan coba lagi.';
             return false;
         }
+    }
+
+    // Data e-voucher (reservasi + paket) berdasarkan kode booking
+    public function get_voucher($kodeBooking)
+    {
+        $stmt = $this->conn->prepare(
+            "SELECT r.*, d.qty, p.nama_paket
+             FROM reservasi r
+             LEFT JOIN detail_reservasi d ON d.id_reservasi = r.id_reservasi
+             LEFT JOIN paket_menu p ON p.id_paket = d.id_paket
+             WHERE r.kode_booking = ? LIMIT 1"
+        );
+        $stmt->execute([$kodeBooking]);
+        return $stmt->fetch() ?: null;
     }
 
     public function getall_data_reservasi()

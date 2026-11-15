@@ -89,3 +89,12 @@ INSERT INTO transaksi (id_transaksi, id_pesanan, id_pembayaran, id_kas, metode_p
 (3, 3, 3, 1, 'QRIS', 'Reservasi (Lt. 2)', 'Lunas', '2026-10-25', 400000.00),
 (4, 4, 4, 1, 'Tunai', 'Reservasi (Lt. 1)', 'Lunas', '2026-10-25', 250000.00),
 (5, 5, 5, 1, 'QRIS', 'Reservasi (Lt. 1)', 'Lunas', '2026-10-25', 550000.00);
+
+  INSERT INTO pesanan (kode_pesanan, no_meja, jenis_pesanan, status, total_harga)
+   VALUES ('TRX-TEST-0001', 5, 'Dine In', 'Menunggu Pembayaran', 50000);
+   INSERT INTO detail_pesanan (id_pesanan, id_menu, jumlah, subtotal)
+   SELECT LAST_INSERT_ID(), id_menu, 1, harga FROM menu LIMIT 1;
+
+  UPDATE menu SET kategori = 'Paket Ayam' WHERE nama_menu IN ('Paket Ayam Geprek Juara', 'Paket Ayam Krispi Gurih');
+  UPDATE menu SET kategori = 'Ala Carte' WHERE nama_menu = 'Maky Chicken Burger';
+  UPDATE menu SET kategori = 'Snack'     WHERE nama_menu = 'Chicken Tenders & Fries';

@@ -9,41 +9,37 @@ class StrukModel {
         $this->conn = $database->getConnection();
     }
 
+    // Riwayat transaksi yang sudah lunas (terbaru dulu)
     public function getRiwayatTransaksi() {
-        $query = "SELECT p.*, pay.kode_transaksi, pay.metode, pay.uang_diterima, pay.kembalian, pay.waktu_bayar 
-                  FROM pesanan p 
-                  LEFT JOIN pembayaran pay ON p.id_pesanan = pay.id_pesanan 
-                  ORDER BY p.id_pesanan DESC";
-        $stmt = $this->conn->prepare($query);
+        $sql = "SELECT p.*, pay.kode_transaksi, pay.metode, pay.uang_diterima, pay.kembalian, pay.waktu_bayar
+                FROM pembayaran pay
+                JOIN pesanan p ON p.id_pesanan = pay.id_pesanan
+                WHERE pay.status = 'Lunas'
+                ORDER BY pay.waktu_bayar DESC, pay.id_pembayaran DESC
+                LIMIT 50";
+        $stmt = $this->conn->prepare($sql);
         $stmt->execute();
-        return $stmt->fetchAll();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getStrukDetail($idPesanan) {
-        $queryPesanan = "SELECT p.*, pay.kode_transaksi, pay.metode, pay.uang_diterima, pay.kembalian, pay.waktu_bayar 
-                        FROM pesanan p 
-                        LEFT JOIN pembayaran pay ON p.id_pesanan = pay.id_pesanan 
-                        WHERE p.id_pesanan = :id_pesanan LIMIT 1";
-        $stmtP = $this->conn->prepare($queryPesanan);
-        $stmtP->bindParam(':id_pesanan', $idPesanan);
-        $stmtP->execute();
-        $pesanan = $stmtP->fetch();
-
+        $sql = "SELECT p.*, pay.kode_transaksi, pay.metode, pay.uang_diterima, pay.kembalian, pay.waktu_bayar
+                FROM pembayaran pay
+                JOIN pesanan p ON p.id_pesanan = pay.id_pesanan
+                WHERE p.id_pesanan = :id AND pay.status = 'Lunas'
+                ORDER BY pay.id_pembayaran DESC LIMIT 1";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute([':id' => $idPesanan]);
+        $pesanan = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$pesanan) return null;
 
-        $queryItems = "SELECT dp.*, m.nama_menu, m.harga 
-                       FROM detail_pesanan dp 
-                       JOIN menu m ON dp.id_menu = m.id_menu 
-                       WHERE dp.id_pesanan = :id_pesanan";
-        $stmtI = $this->conn->prepare($queryItems);
-        $stmtI->bindParam(':id_pesanan', $idPesanan);
-        $stmtI->execute();
-        $items = $stmtI->fetchAll();
+        $sqlItem = "SELECT dp.jumlah, dp.subtotal, dp.catatan, m.nama_menu, m.harga
+                    FROM detail_pesanan dp
+                    JOIN menu m ON dp.id_menu = m.id_menu
+                    WHERE dp.id_pesanan = :id";
+        $stmtI = $this->conn->prepare($sqlItem);
+        $stmtI->execute([':id' => $idPesanan]);
 
-        return [
-            'pesanan' => $pesanan,
-            'items' => $items
-        ];
+        return ['pesanan' => $pesanan, 'items' => $stmtI->fetchAll(PDO::FETCH_ASSOC)];
     }
 }
-?>

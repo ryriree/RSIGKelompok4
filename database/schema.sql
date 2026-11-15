@@ -176,3 +176,6 @@ CREATE TABLE IF NOT EXISTS kontak_admin (
     CONSTRAINT FK_kontak_admin_users
         FOREIGN KEY (id_user) REFERENCES users (id_user)
 );
+
+ALTER TABLE users MODIFY status_akun ENUM('Aktif','Nonaktif','Diblokir') NOT NULL DEFAULT 'Aktif';
+UPDATE users SET status_akun = 'Nonaktif' WHERE status_akun = 'Non-Aktif';

@@ -1,147 +1,101 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-require_once '../../koneksi.php';
-
-if (!isset($_SESSION['draft_reservasi'])) {
-    header('Location: reservasi_step1.php');
-    exit;
-}
-
-$draft = $_SESSION['draft_reservasi'];
-
-// Eksekusi Simpan Reservasi Ke Database
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bayar_dp'])) {
-    try {
-        $pdo->beginTransaction();
-
-        // 1. Simpan Ke Tabel reservasi
-        $stmtRes = $pdo->prepare("INSERT INTO reservasi (kode_booking, nama_pemesan, kontak_pemesanan, tanggal, slot_waktu, lantai, jumlah_orang, dp, total, status, status_dp) 
-            VALUES (:kode, :nama, :kontak, :tgl, :slot, :lantai, :jml, 50000.00, 50000.00, 'Confirmed', 'Lunas')");
-        
-        $stmtRes->execute([
-            ':kode'   => $draft['kode_booking'],
-            ':nama'   => $draft['nama_pemesan'],
-            ':kontak' => $draft['kontak_pemesanan'],
-            ':tgl'    => $draft['tanggal'],
-            ':slot'   => $draft['slot_waktu'],
-            ':lantai' => $draft['lantai'] ?? 1,
-            ':jml'    => $draft['jumlah_orang']
-        ]);
-        
-        $id_reservasi = $pdo->lastInsertId();
-
-        // 2. Simpan Catatan Pembayaran DP
-        $stmtPay = $pdo->prepare("INSERT INTO pembayaran (kode_transaksi, id_reservasi, metode, total, status, waktu_bayar) 
-            VALUES (:kode_tr, :id_res, 'QRIS', 50000.00, 'Lunas', NOW())");
-        $stmtPay->execute([
-            ':kode_tr' => 'TRX-' . date('YmdHis'),
-            ':id_res'  => $id_reservasi
-        ]);
-
-        $pdo->commit();
-        
-        // Simpan info sukses untuk halaman e-voucher final
-        $_SESSION['booking_sukses'] = $draft;
-        unset($_SESSION['draft_reservasi']);
-        
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        $errorMsg = "Gagal memproses transaksi: " . $e->getMessage();
-    }
-}
-
-$bookingSukses = $_SESSION['booking_sukses'] ?? null;
+// Langkah 4. Mode bayar: $draft, $simulasi, $pesanRsv. Mode voucher: $voucher
+$voucher = $voucher ?? null; $draft = $draft ?? [];
+$rpR = function ($n) { return 'Rp' . number_format((float)$n, 0, ',', '.'); };
 ?>
+<div class="rv">
+<?php if ($voucher): ?>
+<?php $langkah = 5; require BASE_PATH . '/views/pelanggan/_stepper.php'; ?>
+<style>
+.rv .vc { max-width: 520px; margin: 0 auto; }
+.rv .vc-ok { text-align: center; margin-bottom: 18px; }
+.rv .vc-ok h1 { font-size: clamp(24px, 5vw, 34px); color: var(--success); }
+.rv .vc-paper { position: relative; background: #fff; border: 2px dashed var(--primary); border-radius: 24px; padding: 28px 30px; text-align: center; }
+.rv .vc-kode { font-family: var(--font-display); font-size: clamp(28px, 6vw, 40px); color: var(--primary); margin: 8px 0; }
+.rv .vc-tag { display: inline-block; background: var(--primary); color: var(--cream-50); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; border-radius: 999px; padding: 3px 14px; }
+.rv .vc-st { display: inline-block; background: var(--green-100); color: var(--success); font-weight: 700; font-size: 12px; border-radius: 999px; padding: 3px 14px; margin-top: 8px; }
+.rv .vc .sum { text-align: left; margin-top: 16px; }
+.rv .vc-aksi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.rv .vc-aksi .btn { flex: 1; }
+@media print { body * { visibility: hidden; } #voucher, #voucher * { visibility: visible; } #voucher { position: absolute; left: 0; top: 0; width: 100%; } }
+</style>
+<div class="vc">
+    <div class="vc-ok"><h1>Reservasi dikonfirmasi</h1><p class="muted">DP sudah diterima. Simpan atau cetak e-Voucher ini.</p></div>
 
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Step 4 - e-Voucher Reservasi | Maky Chicken</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Titan+One&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'red-brand': '#B3131B',
-                        'red-dark': '#8E0F18',
-                        'cream-bg': '#FFF3DC',
-                        'cream-light': '#FFFAF0',
-                        'cream-border': '#F2D49A',
-                        'text-main': '#2A1010',
-                        'text-muted': '#6B4A45',
-                        'yellow-accent': '#FFB21E'
-                    },
-                    fontFamily: {
-                        headline: ['Epilogue'],
-                        body: ['Plus Jakarta Sans'],
-                        display: ['Titan One']
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="bg-cream-bg text-text-main font-body min-h-screen pt-10 pb-16 flex items-center justify-center">
-    <div class="max-w-xl w-full px-6">
+    <div class="vc-paper" id="voucher">
+        <span class="vc-tag">e-Voucher reservasi</span>
+        <div class="vc-kode"><?= eRv($voucher['kode_booking']) ?></div>
+        <div><b><?= eRv($voucher['nama_pemesan']) ?></b> · <?= (int)$voucher['jumlah_orang'] ?> orang</div>
+        <div><span class="vc-st"><?= eRv($voucher['status']) ?> · DP <?= eRv($voucher['status_dp']) ?></span></div>
+        <div class="sum">
+            <p><span>Tanggal</span><span><?= eRv(date('d/m/Y', strtotime($voucher['tanggal']))) ?></span></p>
+            <p><span>Waktu</span><span><?= eRv($voucher['slot_waktu']) ?></span></p>
+            <p><span>Lokasi</span><span>Lantai <?= (int)$voucher['lantai'] ?> · <?= eRv(Reservasi::LANTAI[(int)$voucher['lantai']] ?? '') ?></span></p>
+            <p><span>Paket</span><span><?= eRv($voucher['nama_paket'] ?? '-') ?> ×<?= (int)($voucher['qty'] ?? 0) ?></span></p>
+            <p><span>Total tagihan</span><span><?= $rpR($voucher['total']) ?></span></p>
+            <p><span>DP dibayar</span><b><?= $rpR($voucher['dp']) ?></b></p>
+            <p style="border:0"><span>Sisa di kasir</span><span><?= $rpR(max(0, (float)$voucher['total'] - (float)$voucher['dp'])) ?></span></p>
+        </div>
+        <p class="muted" style="margin-top:8px">Tunjukkan voucher ini kepada kasir/pelayan saat tiba.</p>
+    </div>
 
-        <?php if (!$bookingSukses): ?>
-            <!-- FORM BAYAR DP (BEFORE PAID) -->
-            <div class="bg-cream-light rounded-3xl p-8 border border-cream-border shadow-xl space-y-6">
-                <div class="text-center space-y-2">
-                    <span class="px-3 py-1 bg-yellow-accent text-text-main text-xs font-bold rounded-full uppercase">Langkah Terakhir</span>
-                    <h1 class="text-2xl font-display text-red-brand">PEMBAYARAN DP RESERVASI</h1>
-                    <p class="text-xs text-text-muted">Scan QRIS di bawah ini untuk menyelesaikan konfirmasi tempat</p>
-                </div>
+    <div class="vc-aksi">
+        <button type="button" class="btn btn--info" onclick="window.print()">Cetak / Simpan PDF</button>
+        <a class="btn btn--accent" href="index.php?page=reservasi-unduh">Unduh .txt</a>
+        <a class="btn btn--outline" href="index.php?page=form-reservasi">Reservasi baru</a>
+    </div>
+</div>
 
-                <div class="p-4 bg-white rounded-2xl border border-cream-border text-center space-y-3">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=MAKY-CHICKEN-DP" alt="QRIS" class="mx-auto border p-2 rounded-xl">
-                    <p class="font-display text-xl text-red-brand">Rp50.000</p>
-                    <p class="text-[11px] text-text-muted">Maky Chicken QRIS Official</p>
-                </div>
+<?php else: ?>
+<?php $langkah = 4; require BASE_PATH . '/views/pelanggan/_stepper.php'; ?>
+<style>
+.rv .qr { width: 200px; height: 200px; margin: 8px auto 12px; border-radius: 16px; border: 1.5px solid var(--border); background: repeating-conic-gradient(var(--ink-900) 0 25%, #fff 0 50%) 0 0/24px 24px; }
+.rv .nominal { font-family: var(--font-display); font-size: 36px; color: var(--primary); }
+.rv .demo { background: var(--yellow-100); border-radius: 14px; padding: 12px 16px; font-size: 12px; margin-top: 14px; text-align: left; }
+</style>
+<div class="cols">
+    <aside class="card sum">
+        <h3>Ringkasan reservasi</h3>
+        <p><span>Nama</span><span><?= eRv($draft['namaPemesan']) ?></span></p>
+        <p><span>Jadwal</span><span><?= eRv(date('d/m/Y', strtotime($draft['tanggal']))) ?> · <?= eRv($draft['slotWaktu']) ?></span></p>
+        <p><span>Tamu</span><span><?= (int)$draft['jumlahOrang'] ?> orang</span></p>
+        <p><span>Lokasi</span><span>Lantai <?= (int)$draft['lantai'] ?></span></p>
+        <p><span><?= eRv($draft['paketNama']) ?> ×<?= (int)$draft['qty'] ?></span><span><?= $rpR($draft['subtotal']) ?></span></p>
+        <p><span>Service fee</span><span><?= $rpR($draft['serviceFee']) ?></span></p>
+        <p class="big"><span>Total</span><span class="harga"><?= $rpR($draft['total']) ?></span></p>
+        <p style="border:0"><span>Sisa di kasir</span><span><?= $rpR($draft['total'] - $draft['dp']) ?></span></p>
+        <a class="btn btn--ghost" style="width:100%" href="index.php?page=reservasi-paket">← Ubah paket</a>
+    </aside>
 
-                <form method="POST" action="">
-                    <button type="submit" name="bayar_dp" value="1" class="w-full py-4 bg-red-brand text-white font-bold rounded-full text-sm shadow-lg hover:bg-red-dark transition-all flex items-center justify-center gap-2">
-                        KONFIRMASI PEMBAYARAN & TERBITKAN E-VOUCHER
-                        <span class="material-symbols-outlined">verified</span>
-                    </button>
-                </form>
-            </div>
+    <section class="card" style="text-align:center">
+        <h2>4. Bayar DP</h2>
+        <?php if (!empty($pesanRsv)): ?><div class="notice <?= $pesanRsv['tipe'] === 'ok' ? 'ok' : '' ?>" style="text-align:left"><?= eRv($pesanRsv['teks']) ?></div><?php endif; ?>
 
-        <?php else: ?>
-            <!-- STRUK E-VOUCHER (AFTER PAID) -->
-            <div class="bg-cream-light rounded-3xl p-8 border-2 border-red-brand shadow-2xl space-y-6 text-center">
-                <div class="w-16 h-16 rounded-full bg-green-100 text-green-700 flex items-center justify-center mx-auto">
-                    <span class="material-symbols-outlined text-4xl">check_circle</span>
-                </div>
-                
-                <div>
-                    <span class="text-xs text-green-700 font-bold uppercase tracking-wider">RESERVASI CONFIRMED</span>
-                    <h1 class="text-3xl font-display text-red-brand mt-1"><?= htmlspecialchars($bookingSukses['kode_booking']) ?></h1>
-                    <p class="text-xs text-text-muted mt-1">Tunjukkan e-Voucher ini kepada kasir/pelayan saat tiba di restoran.</p>
-                </div>
+        <div class="qr" role="img" aria-label="Kode QRIS DP"></div>
+        <div class="nominal"><?= $rpR($draft['nominalDP']) ?></div>
+        <p class="muted">Referensi: <?= eRv($draft['idTransaksi']) ?></p>
+        <p class="muted" style="margin-top:8px">Pindai dengan aplikasi pembayaran, lalu e-Voucher terbit setelah pembayaran terverifikasi.</p>
 
-                <div class="p-5 bg-cream-bg rounded-2xl border border-cream-border text-left space-y-2 text-xs">
-                    <p><strong>Nama Pemesan:</strong> <?= htmlspecialchars($bookingSukses['nama_pemesan']) ?></p>
-                    <p><strong>Tanggal & Waktu:</strong> <?= htmlspecialchars($bookingSukses['tanggal']) ?> - <?= htmlspecialchars($bookingSukses['slot_waktu']) ?></p>
-                    <p><strong>Jumlah Tamu:</strong> <?= htmlspecialchars($bookingSukses['jumlah_orang']) ?> Tamu</p>
-                    <p><strong>Lokasi Meja:</strong> Lantai <?= htmlspecialchars($bookingSukses['lantai'] ?? 1) ?> (Meja 08)</p>
-                    <p><strong>Status DP:</strong> <span class="text-green-700 font-bold">LUNAS (Rp50.000)</span></p>
-                </div>
-
-                <a href="reservasi_step1.php" class="block w-full py-3.5 bg-red-brand text-white font-bold rounded-full text-xs shadow-md hover:bg-red-dark">
-                    SELESAI / BUAT RESERVASI BARU
-                </a>
-            </div>
+        <?php if (!empty($simulasi)): ?>
+            <form method="POST" action="index.php?page=reservasi-bayar-konfirmasi" style="margin-top:16px">
+                <input type="hidden" name="id_transaksi" value="<?= eRv($draft['idTransaksi']) ?>">
+                <button type="submit" class="btn" style="width:100%" id="tombolBayar">Simulasi: saya sudah bayar</button>
+            </form>
+            <div class="demo"><b>Mode simulasi.</b> Belum terhubung ke payment gateway, jadi tombol ini hanya untuk demo.</div>
         <?php endif; ?>
 
-    </div>
-</body>
-</html>
+        <div class="actions" style="justify-content:center">
+            <a class="btn btn--outline btn--sm" href="index.php?page=reservasi-bayar&ulang=1">Buat QR baru</a>
+            <form method="POST" action="index.php?page=reservasi-draft-batal" style="margin:0" onsubmit="return confirm('Batalkan reservasi ini?')">
+                <button type="submit" class="btn btn--ghost btn--sm">Batalkan reservasi</button>
+            </form>
+        </div>
+    </section>
+</div>
+<script>
+document.querySelector('#tombolBayar')?.closest('form').addEventListener('submit', function () {
+    document.getElementById('tombolBayar').disabled = true; // cegah klik ganda
+});
+</script>
+<?php endif; ?>
+</div>

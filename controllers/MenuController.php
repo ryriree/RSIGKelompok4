@@ -65,12 +65,10 @@ class MenuController
         redirect('kelola-menu');
     }
 
-        // ?page=menu-pelanggan (publik)
-            // ?page=menu-pelanggan (publik)
+       // ?page=menu-pelanggan (publik)
     public function menuPelanggan()
     {
-        $kategori = $_GET['kategori'] ?? null;
-        $menus    = $this->menuModel->getAllMenu($kategori);
+        $menus = $this->menuModel->getAllMenu();
 
         require BASE_PATH . '/views/pelanggan/Melihat_Menu.php';
     }

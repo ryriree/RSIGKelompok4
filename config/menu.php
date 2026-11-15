@@ -6,6 +6,7 @@ return [
     // OVERVIEW
     ['id' => 'internal-dashboard', 'label' => 'Dashboard',          'icon' => 'home',  'group' => 'OVERVIEW',               'roles' => ['*']],
     ['id' => 'pos',                'label' => 'Antrean POS Kasir',  'icon' => 'pos',   'group' => 'OVERVIEW',               'roles' => ['kasir']],
+    ['id' => 'struk',              'label' => 'Struk & Riwayat',    'icon' => 'list',  'group' => 'OVERVIEW',               'roles' => ['kasir']],
     ['id' => 'status-pesanan',     'label' => 'Status Pesanan',     'icon' => 'list',  'group' => 'OVERVIEW',               'roles' => ['pelayan']],
 
     // MANAJEMEN OPERASIONAL

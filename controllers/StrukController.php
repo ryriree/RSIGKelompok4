@@ -9,11 +9,13 @@ class StrukController {
     }
 
     public function index() {
-        $riwayat = $this->strukModel->getRiwayatTransaksi();
-        $selectedId = $_GET['id'] ?? ($riwayat[0]['id_pesanan'] ?? null);
+        $pesanStruk = $_SESSION['pesan_pos'] ?? null;
+        unset($_SESSION['pesan_pos']);
+
+        $riwayat    = $this->strukModel->getRiwayatTransaksi();
+        $selectedId = (int)($_GET['id'] ?? ($riwayat[0]['id_pesanan'] ?? 0));
         $strukAktif = $selectedId ? $this->strukModel->getStrukDetail($selectedId) : null;
 
-        require_once __DIR__ . '/../views/internal/kasir/cetak_struk.php';
+        require BASE_PATH . '/views/internal/kasir/cetak_struk.php';
     }
 }
-?>

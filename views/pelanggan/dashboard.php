@@ -146,7 +146,7 @@ footer p{font-size:14px;color:var(--text-muted)}
   <div class="wrap">
     <nav class="nav" aria-label="Navigasi utama">
       <a class="brand" href="#home" style="text-decoration:none"><span class="logo" id="lg"></span>Maky Chicken</a>
-      <div class="links"><a class="on" href="#home">Home</a><a href="index.php?page=menu-pelanggan">Menu</a><a href="#reservasi">Reservasi</a><a href="index.php?page=form-kendala">Contact Us</a></div>
+      <div class="links"><a class="on" href="#home">Home</a><a href="index.php?page=menu-pelanggan">Menu</a><a href="index.php?page=form-reservasi">Reservasi</a><a href="index.php?page=form-kendala">Contact Us</a></div>
       <button class="btn btn--accent btn--sm" id="cartBtn"><span id="cartIc"></span>Keranjang (<span id="cartN">0</span>)</button>
     </nav>
     <div class="hero-grid">
@@ -199,7 +199,7 @@ footer p{font-size:14px;color:var(--text-muted)}
 
 <footer><div class="wrap"><div class="fgrid">
   <div><h4 style="color:var(--primary);font-size:22px">Maky Chicken</h4><p>Restoran ayam krispi &amp; geprek modern dengan cita rasa Nusantara otentik. Pemesanan meja digital dan reservasi keluarga.</p></div>
-  <div><h4>Navigasi</h4><a href="#home">Beranda</a><a href="#menu">Daftar Menu</a><a href="#reservasi">Reservasi Lantai</a><a href="#contact">Bantuan &amp; FAQ</a></div>
+  <div><h4>Navigasi</h4><a href="#home">Beranda</a><a href="#menu">Daftar Menu</a><a href="index.php?page=form-reservasi">Reservasi Lantai</a><a href="#contact">Bantuan &amp; FAQ</a></div>
   <div><h4>Jam Operasional</h4><p><b>Senin - Jumat:</b><br>10:00 - 22:00 WIB</p><p style="margin-top:8px"><b>Sabtu - Minggu:</b><br>09:00 - 23:00 WIB</p></div>
   <div><h4>Hubungi Kami</h4><p>Jl. Merdeka Kuliner No. 88, Jakarta Selatan</p><p>info@makychicken.id</p><p>WhatsApp Admin: +62 812-3456-7890</p></div>
 </div><div class="copy">© 2026 Maky Chicken Indonesia. Seluruh hak cipta dilindungi.</div></div></footer>
