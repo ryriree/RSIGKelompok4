@@ -38,7 +38,7 @@ class LaporanPenjualanController {
     public function tampilkanDashboard($dataPenjualan, $dataKas) {
         $tanggal = $this->tanggal;
         // Panggil View HalamanDashboardPenjualan
-        require_once __DIR__ . '/../views/internal/admin/laporan_penjualan.php';
+        require BASE_PATH . '/views/internal/admin/laporan_penjualan.php';
     }
 
     public function tampilkanMuatUlang($pesan) {

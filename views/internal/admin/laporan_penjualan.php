@@ -1,8 +1,20 @@
 <?php
-// Konten saja. Sidebar, header, dan CSS dasar ada di views/layouts/staff.php
-// Variabel $tanggal, $dataPenjualan, $dataKas dikirim oleh LaporanPenjualanController
+// Konten saja. Variabel $tanggal, $dataPenjualan, $dataKas dikirim oleh LaporanPenjualanController
 $tanggalAktif = $tanggal ?? date('Y-m-d');
-$jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['daftar_transaksi']) : 142;
+$dataKas   = is_array($dataKas ?? null) ? $dataKas : [];
+$rg        = $dataPenjualan['ringkasan'] ?? [];
+$daftarTrx = $dataPenjualan['daftar_transaksi'] ?? [];
+$topMenu   = $dataPenjualan['top_menu'] ?? [];
+$jumlahTrx = count($daftarTrx);
+
+$rpL = function ($n) { return 'Rp' . number_format((float)$n, 0, ',', '.'); };
+$totalPend = (float)($rg['total_pendapatan'] ?? 0);
+$totalTrx  = (int)($rg['total_trx'] ?? 0);
+$qris  = (float)($rg['total_qris'] ?? 0);   $nQris  = (int)($rg['count_qris'] ?? 0);
+$tunai = (float)($rg['total_tunai'] ?? 0);  $nTunai = (int)($rg['count_tunai'] ?? 0);
+$debit = (float)($rg['total_debit'] ?? 0);  $nDebit = (int)($rg['count_debit'] ?? 0);
+$pct = function ($v) use ($totalPend) { return $totalPend > 0 ? round($v / $totalPend * 100, 1) : 0; };
+$avg = function ($v, $n) { return $n > 0 ? $v / $n : 0; };
 ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 
@@ -37,8 +49,8 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
 .lp .card-header-flex p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
 .lp .ratio-pill-bar { background: var(--cream-100); border-radius: 999px; height: 26px; display: flex; overflow: hidden; margin-bottom: 16px; border: 1px solid var(--cream-300); font-weight: 700; font-size: 10px; }
-.lp .ratio-qris { background: var(--red-600); color: #fff; display: flex; align-items: center; justify-content: center; width: 70.4%; }
-.lp .ratio-tunai { background: var(--yellow-500); color: var(--ink-900); display: flex; align-items: center; justify-content: center; width: 29.6%; }
+.lp .ratio-qris { background: var(--red-600); color: #fff; display: flex; align-items: center; justify-content: center; }
+.lp .ratio-tunai { background: var(--yellow-500); color: var(--ink-900); display: flex; align-items: center; justify-content: center; }
 .lp .method-subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
 .lp .method-box { background: var(--cream-50); border: 1.5px solid var(--cream-200); border-radius: 14px; padding: 12px 14px; }
 .lp .method-box small { font-size: 10px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 2px; }
@@ -70,10 +82,7 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
 .lp .pill-reservasi { background: var(--blue-100); color: var(--info); }
 
 .lp .pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; font-size: 11px; color: var(--text-muted); font-weight: 600; background: #fff; border-top: 1px solid var(--cream-200); flex-wrap: wrap; gap: 8px; }
-.lp .page-btn { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--cream-300); background: #fff; cursor: pointer; font-weight: 600; text-decoration: none; color: inherit; }
-.lp .page-btn.active { background: var(--red-600); color: #fff; border-color: var(--red-600); }
 
-/* Modal kas fisik (nama kelas sendiri agar tidak bentrok dengan modal logout) */
 .kas-overlay { position: fixed; inset: 0; background: rgba(94,10,16,.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 1000; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .25s ease-in-out; }
 .kas-overlay.on { opacity: 1; pointer-events: auto; }
 .kas-modal { background: #fff; border-radius: 24px; box-shadow: var(--shadow-3); padding: 24px; max-width: 440px; width: 100%; border: 1.5px solid var(--cream-300); transform: translateY(20px) scale(.95); transition: transform .25s cubic-bezier(.34,1.56,.64,1); font-size: 13px; }
@@ -87,12 +96,9 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
 
 <div class="lp">
 
-    <!-- TOOLBAR: tanggal, export, input kas -->
     <p class="page-desc" style="margin-bottom:16px;">Ringkasan omset harian, audit kas fisik kasir, serta riwayat transaksi penjualan.</p>
 
     <div class="action-group">
-        <form action="index.php" method="GET" class="date-pill">
-
         <form action="index.php" method="GET" class="date-pill">
             <input type="hidden" name="page" value="laporan-penjualan">
             <span style="color:var(--text-muted); font-size:10px;">TANGGAL:</span>
@@ -113,24 +119,25 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
         <div class="kpi-card">
             <span class="kpi-title">TOTAL PENDAPATAN</span>
             <i class="bi bi-graph-up-arrow kpi-icon-corner"></i>
-            <div class="kpi-val">Rp<?= number_format($dataPenjualan['ringkasan']['total_pendapatan'] ?? 8450000, 0, ',', '.') ?></div>
-            <div class="kpi-sub">Rata-rata: Rp59.500 / trx</div>
+            <div class="kpi-val"><?= $rpL($totalPend) ?></div>
+            <div class="kpi-sub">Rata-rata: <?= $rpL($avg($totalPend, $totalTrx)) ?> / trx</div>
         </div>
 
         <div class="kpi-card">
             <span class="kpi-title">TOTAL TRANSAKSI</span>
             <i class="bi bi-receipt-cutoff kpi-icon-corner"></i>
-            <div class="kpi-val" style="color:var(--ink-900);"><?= $dataPenjualan['ringkasan']['total_trx'] ?? 142 ?> <span style="font-size:16px;">Trx</span></div>
+            <div class="kpi-val" style="color:var(--ink-900);"><?= $totalTrx ?> <span style="font-size:16px;">Trx</span></div>
             <div class="kpi-sub">
-                <span style="color:var(--info);">● 100 QRIS</span> •
-                <span style="color:var(--yellow-600);">● 42 Tunai</span>
+                <span style="color:var(--info);">● <?= $nQris ?> QRIS</span> •
+                <span style="color:var(--yellow-600);">● <?= $nTunai ?> Tunai</span>
+                <?php if ($nDebit > 0): ?> • <span>● <?= $nDebit ?> Debit</span><?php endif; ?>
             </div>
         </div>
 
         <div class="kpi-card">
             <span class="kpi-title">KAS SISTEM (OTOMATIS)</span>
             <i class="bi bi-laptop kpi-icon-corner"></i>
-            <div class="kpi-val" style="color:var(--info);">Rp<?= number_format($dataKas['kas_sistem'] ?? 2500000, 0, ',', '.') ?></div>
+            <div class="kpi-val" style="color:var(--info);"><?= $rpL($dataKas['kas_sistem'] ?? 0) ?></div>
             <div class="kpi-sub">● SISTEM POS</div>
         </div>
 
@@ -139,13 +146,13 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                 <span class="kpi-title">KAS FISIK & AUDIT</span>
                 <a href="#" style="color:var(--info); font-size:10px; font-weight:700; text-decoration:none;" onclick="openKasModal(); return false;">UBAH</a>
             </div>
-            <div class="kpi-val" style="color:var(--ink-900);">Rp<?= number_format($dataKas['kas_fisik'] ?? 2500000, 0, ',', '.') ?></div>
+            <div class="kpi-val" style="color:var(--ink-900);"><?= $rpL($dataKas['kas_fisik'] ?? 0) ?></div>
             <div class="kpi-sub">
                 <?php
                 $st = $dataKas['status_selisih'] ?? 'Sesuai';
                 $badgeClass = ($st == 'Sesuai') ? 'pill-dinein' : (($st == 'Surplus') ? 'pill-tunai' : 'pill-qris');
                 ?>
-                <span class="pill-status <?= $badgeClass ?>">● Status Kasir: <?= htmlspecialchars($st) ?> (Rp<?= number_format($dataKas['selisih'] ?? 0, 0, ',', '.') ?>)</span>
+                <span class="pill-status <?= $badgeClass ?>">● Status Kasir: <?= htmlspecialchars($st) ?> (<?= $rpL($dataKas['selisih'] ?? 0) ?>)</span>
             </div>
         </div>
     </section>
@@ -158,24 +165,29 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                     <h3 class="disp">PENDAPATAN BERDASARKAN METODE BAYAR & PEMESANAN</h3>
                     <p>Rincian perputaran omset harian berdasarkan kanal bayar QRIS & Tunai</p>
                 </div>
-                <span class="pill-status pill-dinein">● Hari Ini</span>
+                <span class="pill-status pill-dinein">● <?= htmlspecialchars(date('d/m/Y', strtotime($tanggalAktif))) ?></span>
             </div>
 
             <div class="ratio-pill-bar">
-                <div class="ratio-qris">70.4% QRIS</div>
-                <div class="ratio-tunai">29.6% TUNAI</div>
+                <?php if ($totalPend > 0): ?>
+                    <?php if ($qris > 0): ?><div class="ratio-qris" style="width:<?= $pct($qris) ?>%"><?= $pct($qris) ?>% QRIS</div><?php endif; ?>
+                    <?php if ($tunai > 0): ?><div class="ratio-tunai" style="width:<?= $pct($tunai) ?>%"><?= $pct($tunai) ?>% TUNAI</div><?php endif; ?>
+                    <?php if ($debit > 0): ?><div style="width:<?= $pct($debit) ?>%;background:var(--info);color:#fff;display:flex;align-items:center;justify-content:center"><?= $pct($debit) ?>% DEBIT</div><?php endif; ?>
+                <?php else: ?>
+                    <div style="width:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">Belum ada transaksi</div>
+                <?php endif; ?>
             </div>
 
             <div class="method-subgrid">
                 <div class="method-box">
-                    <small>● QRIS Digital <span style="color:var(--info);">● 70.4%</span></small>
-                    <b style="color:var(--red-600);">Rp5.950.000</b>
-                    <small style="margin-top:4px;">100 Transaksi (Avg Rp59.500)</small>
+                    <small>● QRIS Digital <span style="color:var(--info);">● <?= $pct($qris) ?>%</span></small>
+                    <b style="color:var(--red-600);"><?= $rpL($qris) ?></b>
+                    <small style="margin-top:4px;"><?= $nQris ?> Transaksi (Avg <?= $rpL($avg($qris, $nQris)) ?>)</small>
                 </div>
                 <div class="method-box">
-                    <small>● Kasir Tunai <span style="color:var(--yellow-600);">● 29.6%</span></small>
-                    <b style="color:var(--yellow-600);">Rp2.500.000</b>
-                    <small style="margin-top:4px;">42 Transaksi (Avg Rp59.524)</small>
+                    <small>● Kasir Tunai <span style="color:var(--yellow-600);">● <?= $pct($tunai) ?>%</span></small>
+                    <b style="color:var(--yellow-600);"><?= $rpL($tunai) ?></b>
+                    <small style="margin-top:4px;"><?= $nTunai ?> Transaksi (Avg <?= $rpL($avg($tunai, $nTunai)) ?>)</small>
                 </div>
             </div>
 
@@ -184,19 +196,18 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                     <span style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">RINCIAN JENIS PEMESANAN</span>
                     <span style="font-size:10px; font-weight:700; color:var(--text-muted);">3 Kategori Layanan</span>
                 </div>
-
+                <?php
+                $layanan = [
+                    ['Dine In',          'total_dine_in',   'count_dine_in'],
+                    ['Take Away',        'total_take_away', 'count_take_away'],
+                    ['Reservasi Online', 'total_reservasi', 'count_reservasi'],
+                ];
+                foreach ($layanan as [$nama, $kTotal, $kCount]): ?>
                 <div class="service-row">
-                    <span>Dine In <small class="text-muted">(<?= $dataPenjualan['ringkasan']['count_dine_in'] ?? 92 ?> Transaksi | 60.4%)</small></span>
-                    <b>Rp<?= number_format($dataPenjualan['ringkasan']['total_dine_in'] ?? 5100000, 0, ',', '.') ?></b>
+                    <span><?= $nama ?> <small class="text-muted">(<?= (int)($rg[$kCount] ?? 0) ?> Transaksi | <?= $pct((float)($rg[$kTotal] ?? 0)) ?>%)</small></span>
+                    <b><?= $rpL($rg[$kTotal] ?? 0) ?></b>
                 </div>
-                <div class="service-row">
-                    <span>Take Away <small class="text-muted">(<?= $dataPenjualan['ringkasan']['count_take_away'] ?? 34 ?> Transaksi | 25.4%)</small></span>
-                    <b>Rp<?= number_format($dataPenjualan['ringkasan']['total_take_away'] ?? 2150000, 0, ',', '.') ?></b>
-                </div>
-                <div class="service-row">
-                    <span>Reservasi Online <small class="text-muted">(<?= $dataPenjualan['ringkasan']['count_reservasi'] ?? 16 ?> Transaksi | 14.2%)</small></span>
-                    <b>Rp<?= number_format($dataPenjualan['ringkasan']['total_reservasi'] ?? 1200000, 0, ',', '.') ?></b>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
 
@@ -219,8 +230,8 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($dataPenjualan['top_menu'])): ?>
-                        <?php foreach ($dataPenjualan['top_menu'] as $idx => $m): ?>
+                    <?php if (!empty($topMenu)): ?>
+                        <?php foreach ($topMenu as $idx => $m): ?>
                         <tr>
                             <td><span class="rank-circle"><?= $idx + 1 ?></span></td>
                             <td>
@@ -228,28 +239,11 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                                 <small style="color:var(--text-muted); font-size:10px;"><?= htmlspecialchars($m['kategori']) ?></small>
                             </td>
                             <td><b><?= (int)$m['total_terjual'] ?> porsi</b></td>
-                            <td style="text-align:right;"><b style="color:var(--red-600);">Rp<?= number_format($m['total_subtotal'], 0, ',', '.') ?></b></td>
+                            <td style="text-align:right;"><b style="color:var(--red-600);"><?= $rpL($m['total_subtotal']) ?></b></td>
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr>
-                            <td><span class="rank-circle">1</span></td>
-                            <td>
-                                <b style="color:var(--ink-900);">Paket Ayam Geprek Juara</b><br>
-                                <small style="color:var(--text-muted); font-size:10px;">Pedas Level 3 Favorit</small>
-                            </td>
-                            <td><b>78 porsi</b></td>
-                            <td style="text-align:right;"><b style="color:var(--red-600);">Rp1.950.000</b></td>
-                        </tr>
-                        <tr>
-                            <td><span class="rank-circle" style="background:var(--cream-200);">2</span></td>
-                            <td>
-                                <b style="color:var(--ink-900);">Paket Ayam Krispi Gurih</b><br>
-                                <small style="color:var(--text-muted); font-size:10px;">Original Rempah</small>
-                            </td>
-                            <td><b>54 porsi</b></td>
-                            <td style="text-align:right;"><b style="color:var(--red-600);">Rp1.350.000</b></td>
-                        </tr>
+                        <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-muted)">Belum ada penjualan menu pada tanggal ini.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -279,8 +273,8 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($dataPenjualan['daftar_transaksi'])): ?>
-                        <?php foreach ($dataPenjualan['daftar_transaksi'] as $trx): ?>
+                    <?php if (!empty($daftarTrx)): ?>
+                        <?php foreach ($daftarTrx as $trx): ?>
                         <?php
                             $mPesanan = $trx['metode_pesanan'] ?? 'Dine In';
                             $badgePesananClass = 'pill-dinein';
@@ -294,54 +288,23 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
                             <td><b><?= htmlspecialchars($trx['waktu']) ?></b></td>
                             <td><b style="color:var(--red-600);">#<?= htmlspecialchars($trx['id_transaksi_kode']) ?></b></td>
                             <td>
-                                <b><?= htmlspecialchars($trx['nama_pelanggan'] ?? 'Pelanggan Restoran') ?></b><br>
+                                <b><?= htmlspecialchars($trx['nama_pelanggan'] ?? 'Pelanggan Restoran') ?></b>
+                                <?php if (!empty($trx['no_meja'])): ?><small class="text-muted"> · Meja <?= htmlspecialchars($trx['no_meja']) ?></small><?php endif; ?><br>
                                 <span class="pill-status <?= $badgePesananClass ?>">● <?= htmlspecialchars($mPesanan) ?></span>
                             </td>
                             <td><?= htmlspecialchars($trx['rincian_menu']) ?></td>
                             <td><span class="pill-status <?= ($trx['metode_pembayaran'] ?? '') == 'QRIS' ? 'pill-qris' : 'pill-tunai' ?>">● <?= htmlspecialchars($trx['metode_pembayaran']) ?></span></td>
-                            <td style="text-align:right;"><b style="font-size:14px;">Rp<?= number_format($trx['total_bayar'], 0, ',', '.') ?></b></td>
+                            <td style="text-align:right;"><b style="font-size:14px;"><?= $rpL($trx['total_bayar']) ?></b></td>
                         </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr>
-                            <td><b>14:28 WIB</b></td>
-                            <td><b style="color:var(--red-600);">#TRX-20251025-0142</b></td>
-                            <td>Budi Santoso <br><span class="pill-status pill-dinein">● Dine in</span></td>
-                            <td>2x Ayam Geprek Juara, 2x Es Teh Jumbo</td>
-                            <td><span class="pill-status pill-qris">● QRIS</span></td>
-                            <td style="text-align:right;"><b style="font-size:14px;">Rp104.000</b></td>
-                        </tr>
-                        <tr>
-                            <td><b>14:15 WIB</b></td>
-                            <td><b style="color:var(--red-600);">#TRX-20251025-0141</b></td>
-                            <td>Siti Rahmawati <br><span class="pill-status pill-takeaway">● Take Away</span></td>
-                            <td>1x Paket Ayam Krispi, 1x Es Teh Jumbo</td>
-                            <td><span class="pill-status pill-tunai">● Tunai</span></td>
-                            <td style="text-align:right;"><b style="font-size:14px;">Rp58.000</b></td>
-                        </tr>
-                        <tr>
-                            <td><b>14:02 WIB</b></td>
-                            <td><b style="color:var(--red-600);">#TRX-20251025-0140</b></td>
-                            <td>Keluarga Hendra <br><span class="pill-status pill-reservasi">● Reservasi (Lt. 2)</span></td>
-                            <td>Paket Keluarga Mantap 6 Pax</td>
-                            <td><span class="pill-status pill-qris">● QRIS</span></td>
-                            <td style="text-align:right;"><b style="font-size:14px;">Rp400.000</b></td>
-                        </tr>
+                        <tr><td colspan="6" style="text-align:center;padding:28px;color:var(--text-muted)">Belum ada transaksi pada tanggal ini.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
 
             <div class="pagination-bar">
-                <span>Menampilkan 1-10 dari total <?= $jumlahTrx ?> transaksi</span>
-                <div style="display:flex; gap:6px; align-items:center;">
-                    <a href="#" class="page-btn">← Sebelumnya</a>
-                    <a href="#" class="page-btn active">1</a>
-                    <a href="#" class="page-btn">2</a>
-                    <a href="#" class="page-btn">3</a>
-                    <span>...</span>
-                    <a href="#" class="page-btn">15</a>
-                    <a href="#" class="page-btn">Selanjutnya →</a>
-                </div>
+                <span>Menampilkan <?= $jumlahTrx ?> transaksi pada <?= htmlspecialchars(date('d/m/Y', strtotime($tanggalAktif))) ?></span>
             </div>
         </div>
     </section>
@@ -361,22 +324,22 @@ $jumlahTrx = isset($dataPenjualan['daftar_transaksi']) ? count($dataPenjualan['d
 
             <div>
                 <label style="font-size:10px; font-weight:700; text-transform:uppercase; display:block; margin-bottom:4px;">JUMLAH UANG KAS FISIK NYATA (RP) *</label>
-                <input type="number" name="kas_fisik" style="width:100%; min-height:44px; border-radius:14px; border:1.5px solid var(--cream-300); padding:0 14px; font-weight:700;" placeholder="2500000" value="<?= htmlspecialchars((string)($dataKas['kas_fisik'] ?? '')) ?>" required>
+                <input type="number" name="kas_fisik" style="width:100%; min-height:44px; border-radius:14px; border:1.5px solid var(--cream-300); padding:0 14px; font-weight:700;" placeholder="0" value="<?= htmlspecialchars((string)($dataKas['kas_fisik'] ?? '')) ?>" required>
             </div>
 
             <div style="background:var(--cream-50); border:1.5px solid var(--cream-200); border-radius:14px; padding:12px;">
                 <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
                     <span style="color:var(--text-muted);">Kas Sistem (POS):</span>
-                    <b>Rp<?= number_format($dataKas['kas_sistem'] ?? 2500000, 0, ',', '.') ?></b>
+                    <b><?= $rpL($dataKas['kas_sistem'] ?? 0) ?></b>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px;">
                     <span style="color:var(--text-muted);">Kas Fisik Kasir:</span>
-                    <b>Rp<?= number_format($dataKas['kas_fisik'] ?? 2500000, 0, ',', '.') ?></b>
+                    <b><?= $rpL($dataKas['kas_fisik'] ?? 0) ?></b>
                 </div>
                 <hr style="border:0; border-top:1px dashed var(--cream-300); margin:4px 0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-top:6px;">
                     <b>Hasil Selisih:</b>
-                    <span class="pill-status pill-dinein" style="background:var(--green-100); color:var(--success);">● <?= htmlspecialchars($dataKas['status_selisih'] ?? 'Sesuai') ?> (Rp<?= number_format($dataKas['selisih'] ?? 0, 0, ',', '.') ?>)</span>
+                    <span class="pill-status pill-dinein" style="background:var(--green-100); color:var(--success);">● <?= htmlspecialchars($dataKas['status_selisih'] ?? 'Sesuai') ?> (<?= $rpL($dataKas['selisih'] ?? 0) ?>)</span>
                 </div>
             </div>
 

@@ -87,6 +87,12 @@ $routes = [
     'simpan-kas'        => ['c' => 'KasController',  'm' => 'tekanSimpan',       'roles' => ['admin']],
     // UC-16: Download Excel Laporan Penjualan
     'export-excel'      => ['c' => 'ExportController', 'm' => 'tekanExportData', 'roles' => ['admin']],
+        // ===== ADMIN: Manajemen Reservasi =====
+    'reservasi'           => ['c' => 'KelolaReservasi', 'm' => 'index',            'roles' => ['admin'], 'layout' => 'staff'],
+    'reservasi-tambah'    => ['c' => 'KelolaReservasi', 'm' => 'proses_tambah',    'roles' => ['admin']],
+    'reservasi-ubah'      => ['c' => 'KelolaReservasi', 'm' => 'proses_ubah',      'roles' => ['admin']],
+    'reservasi-batal'     => ['c' => 'KelolaReservasi', 'm' => 'proses_batal',     'roles' => ['admin']],
+    'reservasi-status-dp' => ['c' => 'KelolaReservasi', 'm' => 'proses_status_dp', 'roles' => ['admin']],
 
     // ===== KASIR =====
         // ===== KASIR =====
